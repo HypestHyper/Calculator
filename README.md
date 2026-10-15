@@ -2,6 +2,8 @@
 
 A GTK 4 calculator for Linux with a Material 3 Expressive style. It takes its colours from the desktop (dark mode and accent colour) or from a palette you choose.
 
+> **AI disclosure:** This project was written almost entirely by an AI assistant (Claude, by Anthropic), with direction and testing by the author. It works on the setups it was tested on (Hyprland, Sway), but review the code before relying on it, and please report anything that breaks.
+
 <p>
   <img src="docs/screenshots/standard.png" height="380" alt="Standard mode">
   <img src="docs/screenshots/scientific.png" height="380" alt="Scientific mode">
