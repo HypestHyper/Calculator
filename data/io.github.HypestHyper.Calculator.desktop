@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+GenericName=Calculator
+Comment=Calculator with standard and scientific modes
+Exec=io.github.HypestHyper.Calculator
+Icon=io.github.HypestHyper.Calculator
+Terminal=false
+Categories=Utility;Calculator;GTK;
+Keywords=calculator;math;scientific;arithmetic;sum;
+StartupNotify=true
+StartupWMClass=io.github.HypestHyper.Calculator

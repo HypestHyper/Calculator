@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.HypestHyper.Calculator</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT AND Apache-2.0</project_license>
+  <name>Calculator</name>
+  <summary>Calculator with standard and scientific modes</summary>
+  <developer id="io.github.HypestHyper">
+    <name>HypestHyper</name>
+  </developer>
+  <description>
+    <p>
+      A GTK 4 calculator with a Material 3 Expressive style. It takes its colours
+      from the desktop or from a palette you choose.
+    </p>
+    <ul>
+      <li>Standard and scientific modes</li>
+      <li>Live result preview, history and keyboard input</li>
+      <li>Built-in palettes, a custom accent colour or a palette file</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.HypestHyper.Calculator.desktop</launchable>
+  <url type="homepage">https://github.com/HypestHyper/Calculator</url>
+  <url type="bugtracker">https://github.com/HypestHyper/Calculator/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/HypestHyper/Calculator/main/docs/screenshots/standard.png</image>
+      <caption>Standard mode</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/HypestHyper/Calculator/main/docs/screenshots/scientific.png</image>
+      <caption>Scientific mode with a preset palette</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Utility</category>
+    <category>Calculator</category>
+  </categories>
+  <releases>
+    <release version="1.0.0" date="2026-10-15">
+      <description><p>First release.</p></description>
+    </release>
+  </releases>
+</component>

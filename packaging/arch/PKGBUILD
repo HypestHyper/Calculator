@@ -1,0 +1,36 @@
+# Maintainer: HypestHyper
+pkgname=hypest-calculator
+_appid=io.github.HypestHyper.Calculator
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="GTK 4 calculator with standard and scientific modes"
+arch=('any')
+url="https://github.com/HypestHyper/Calculator"
+license=('MIT' 'Apache-2.0')
+depends=('python' 'python-gobject' 'gtk4')
+optdepends=('python-materialyoucolor: exact Material 3 palettes (a built-in approximation is used otherwise)')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "Calculator-$pkgver"
+    local appdir="$pkgdir/usr/share/$_appid"
+    install -dm755 "$appdir"
+    cp -r calculator "$appdir/"
+    find "$appdir" -name '__pycache__' -type d -prune -exec rm -rf {} +
+    install -Dm644 data/fonts/MaterialSymbolsRounded.ttf "$appdir/fonts/MaterialSymbolsRounded.ttf"
+
+    install -Dm755 /dev/stdin "$pkgdir/usr/bin/$_appid" <<EOF
+#!/bin/sh
+PYTHONPATH="/usr/share/$_appid\${PYTHONPATH:+:\$PYTHONPATH}" exec python3 -m calculator "\$@"
+EOF
+    install -Dm644 "data/$_appid.desktop" "$pkgdir/usr/share/applications/$_appid.desktop"
+    install -Dm644 "data/$_appid.metainfo.xml" "$pkgdir/usr/share/metainfo/$_appid.metainfo.xml"
+    install -Dm644 "data/icons/hicolor/scalable/apps/$_appid.svg" \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/$_appid.svg"
+    install -Dm644 "data/icons/hicolor/symbolic/apps/$_appid-symbolic.svg" \
+        "$pkgdir/usr/share/icons/hicolor/symbolic/apps/$_appid-symbolic.svg"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 data/fonts/LICENSE-MaterialSymbols.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MaterialSymbols"
+    install -Dm644 data/icons/LICENSE-MaterialDesignIcons.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MaterialDesignIcons"
+}

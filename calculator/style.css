@@ -1,0 +1,442 @@
+/* Calculator — Material 3 Expressive styling.
+   Colour roles (@primary, @surface_container, …) are defined at runtime
+   by theme.py and prepended to this file. */
+
+/* ---------------------------------------------------------------- base */
+
+window.calculator,
+window.calc-prefs {
+  background-color: @surface;
+  color: @on_surface;
+  font-family: "Google Sans Flex", "Google Sans", "Roboto Flex", "Roboto", "Inter", "Cantarell", sans-serif;
+}
+
+window.calculator.csd,
+window.calc-prefs.csd {
+  border-radius: 24px;
+}
+
+window.calculator.tiled, window.calculator.maximized, window.calculator.fullscreen,
+window.calc-prefs.tiled, window.calc-prefs.maximized {
+  border-radius: 0;
+}
+
+.calculator label, .calc-prefs label { color: inherit; }
+
+.calculator *:focus-visible, .calc-prefs *:focus-visible {
+  outline: 2px solid @secondary;
+  outline-offset: 2px;
+}
+
+/* Material Symbols */
+.msym {
+  font-family: "Material Symbols Rounded";
+  font-size: 22px;
+  font-weight: 400;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-feature-settings: "liga";
+}
+.msym.filled, button:checked .msym { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+.msym.big { font-size: 40px; font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40; }
+
+/* ------------------------------------------------------------- top bar */
+
+.calculator headerbar, .calc-prefs headerbar {
+  background: none;
+  background-color: @surface;
+  color: @on_surface;
+  box-shadow: none;
+  border: none;
+  min-height: 56px;
+  padding: 4px 10px;
+}
+
+.calculator headerbar:backdrop, .calc-prefs headerbar:backdrop {
+  background-color: @surface;
+  color: @on_surface;
+}
+
+headerbar .title-text {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* Window controls follow the palette too. */
+.calculator windowcontrols button, .calc-prefs windowcontrols button {
+  background: none;
+  background-color: @surface_container_high;
+  color: @on_surface_variant;
+  border-radius: 999px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: 0 3px;
+  padding: 0;
+  box-shadow: none;
+  border: none;
+}
+.calculator windowcontrols button:hover, .calc-prefs windowcontrols button:hover {
+  background-color: @surface_container_highest;
+}
+
+/* --------------------------------------------------------- icon button */
+
+button.icon-btn {
+  background: none;
+  background-color: transparent;
+  color: @on_surface_variant;
+  border: none;
+  box-shadow: none;
+  border-radius: 999px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  transition: background-color 150ms ease, color 150ms ease, border-radius 300ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+button.icon-btn:hover { background-color: alpha(@on_surface_variant, 0.08); }
+button.icon-btn:active { background-color: alpha(@on_surface_variant, 0.12); border-radius: 12px; }
+button.icon-btn:checked {
+  background-color: @secondary_container;
+  color: @on_secondary_container;
+  border-radius: 14px;
+}
+
+/* ------------------------------------------- connected button group */
+
+.connected-group { border-spacing: 2px; }
+
+.connected-group > button,
+.connected-group > togglebutton {
+  background: none;
+  background-color: @surface_container_high;
+  color: @on_surface_variant;
+  border: none;
+  box-shadow: none;
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: border-radius 320ms cubic-bezier(0.05, 0.7, 0.1, 1), background-color 180ms ease, color 180ms ease;
+}
+.connected-group > :first-child { border-radius: 20px 6px 6px 20px; }
+.connected-group > :last-child { border-radius: 6px 20px 20px 6px; }
+.connected-group > :hover { background-color: @surface_container_highest; }
+.connected-group > :active { border-radius: 10px; }
+.connected-group > :checked {
+  background-color: @primary;
+  color: @on_primary;
+  border-radius: 999px;
+}
+.connected-group > :checked:hover { background-color: mix(@primary, @on_primary, 0.08); }
+.connected-group.small > button, .connected-group.small > togglebutton { min-height: 34px; padding: 0 12px; font-size: 13px; }
+
+/* ------------------------------------------------------------ display */
+
+.display {
+  padding: 4px 26px 18px 26px;
+}
+
+.prev-line {
+  font-size: 17px;
+  color: @on_surface_variant;
+  font-feature-settings: "tnum";
+}
+
+.expr {
+  font-size: 58px;
+  font-weight: 400;
+  color: @on_surface;
+  font-feature-settings: "tnum";
+}
+.expr.result { font-weight: 500; }
+
+.preview {
+  font-size: 28px;
+  color: @on_surface_variant;
+  font-feature-settings: "tnum";
+}
+.preview.error { color: @error; font-size: 18px; font-weight: 500; }
+
+.text-small .preview { font-size: 22px; }
+.text-large .preview { font-size: 34px; }
+
+.chip {
+  background: none;
+  background-color: @tertiary_container;
+  color: @on_tertiary_container;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  min-height: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* ------------------------------------------------------------- keypad */
+
+.keypad-sheet {
+  background-color: @surface_container_low;
+  border-radius: 36px 36px 0 0;
+  padding: 16px 16px 18px 16px;
+}
+window.calculator.csd .keypad-sheet { border-radius: 36px 36px 24px 24px; }
+window.calculator.tiled .keypad-sheet, window.calculator.maximized .keypad-sheet { border-radius: 36px 36px 0 0; }
+
+/* Key shapes are drawn by the app (an animated rounded clip that adapts to
+   the button's size), so CSS only handles colour here. */
+button.key {
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+  border-radius: 0;
+  outline-offset: -6px;
+  min-height: 64px;
+  min-width: 56px;
+  padding: 0;
+  font-size: 28px;
+  font-weight: 450;
+  font-feature-settings: "tnum";
+  transition: background-color 160ms ease, color 160ms ease;
+}
+button.key:active { transition: background-color 60ms ease; }
+button.key .msym { font-size: 28px; }
+
+.keys-compact button.key { min-height: 50px; font-size: 24px; }
+.keys-large button.key { min-height: 80px; font-size: 32px; }
+.text-small button.key { font-size: 23px; }
+.text-large button.key { font-size: 32px; }
+
+button.key.digit { background-color: @surface_container_highest; color: @on_surface; }
+button.key.digit:hover { background-color: mix(@surface_container_highest, @on_surface, 0.08); }
+button.key.digit:active { background-color: mix(@surface_container_highest, @on_surface, 0.14); }
+
+button.key.op { background-color: @secondary_container; color: @on_secondary_container; font-size: 32px; }
+button.key.op:hover { background-color: mix(@secondary_container, @on_secondary_container, 0.08); }
+button.key.op:active { background-color: mix(@secondary_container, @on_secondary_container, 0.14); }
+
+button.key.util { background-color: @surface_container_high; color: @on_surface_variant; }
+button.key.util:hover { background-color: mix(@surface_container_high, @on_surface, 0.08); }
+button.key.util:active { background-color: mix(@surface_container_high, @on_surface, 0.14); }
+
+button.key.clear { background-color: @tertiary_container; color: @on_tertiary_container; font-weight: 600; }
+button.key.clear:hover { background-color: mix(@tertiary_container, @on_tertiary_container, 0.08); }
+button.key.clear:active { background-color: mix(@tertiary_container, @on_tertiary_container, 0.14); }
+
+/* "=" starts square-ish and morphs round on press: the inverse of the others. */
+button.key.equals {
+  background-color: @primary;
+  color: @on_primary;
+  font-size: 34px;
+}
+button.key.equals:hover { background-color: mix(@primary, @on_primary, 0.08); }
+button.key.equals:active { background-color: mix(@primary, @on_primary, 0.16); }
+
+/* Scientific keys: quieter, smaller. */
+.sci-panel { margin-right: 6px; }
+button.key.sci {
+  background-color: @surface_container;
+  color: @on_surface_variant;
+  font-size: 19px;
+  font-weight: 500;
+  min-height: 48px;
+}
+.text-small button.key.sci { font-size: 16px; }
+.text-large button.key.sci { font-size: 22px; }
+button.key.sci:hover { background-color: mix(@surface_container, @on_surface, 0.08); }
+button.key.sci:active { background-color: mix(@surface_container, @on_surface, 0.14); }
+button.key.sci:checked {
+  background-color: @primary_container;
+  color: @on_primary_container;
+}
+
+/* ------------------------------------------------------ history sheet */
+
+.scrim { background-color: alpha(@scrim, 0.32); }
+
+.sheet {
+  background-color: @surface_container_low;
+  color: @on_surface;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -1px 3px alpha(@shadow, 0.18), 0 -6px 20px alpha(@shadow, 0.16);
+  padding: 0 8px 8px 8px;
+}
+window.calculator.csd .sheet { border-radius: 28px 28px 24px 24px; }
+
+.drag-handle {
+  background-color: alpha(@on_surface_variant, 0.4);
+  border-radius: 2px;
+  min-width: 32px;
+  min-height: 4px;
+  margin: 14px 0 6px 0;
+}
+
+.sheet-title { font-size: 22px; font-weight: 400; }
+
+.sheet list, .sheet listview { background: none; background-color: transparent; }
+.sheet row { background: none; padding: 0; border-radius: 20px; }
+.sheet row:hover { background-color: alpha(@on_surface, 0.06); }
+.sheet row:selected { background-color: alpha(@secondary_container, 0.6); }
+
+.history-row { padding: 10px 8px 10px 16px; }
+.h-expr { font-size: 15px; color: @on_surface_variant; font-feature-settings: "tnum"; }
+.h-result { font-size: 24px; color: @on_surface; font-weight: 500; font-feature-settings: "tnum"; }
+
+.empty-state { color: @on_surface_variant; }
+.empty-state .msym { color: @outline; }
+
+/* ----------------------------------------------------------- snackbar */
+
+.snackbar {
+  background-color: @inverse_surface;
+  color: @inverse_on_surface;
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin: 16px;
+  box-shadow: 0 3px 10px alpha(@shadow, 0.3);
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------- preferences */
+
+.pref-page { padding: 4px 16px 24px 16px; }
+
+.section-title {
+  color: @primary;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 18px 12px 8px 12px;
+}
+
+.pref-card {
+  background-color: @surface_container;
+  border-radius: 24px;
+  padding: 4px 0;
+}
+
+.pref-row { padding: 12px 16px; min-height: 40px; }
+.pref-row + .pref-row { border-top: 1px solid alpha(@outline_variant, 0.5); }
+.pref-row .msym { color: @on_surface_variant; }
+.pref-title { font-size: 15px; color: @on_surface; }
+.pref-subtitle { font-size: 13px; color: @on_surface_variant; }
+
+.code {
+  font-family: "JetBrains Mono", "Fira Code", "Source Code Pro", monospace;
+  font-size: 13px;
+  background-color: @surface_container_lowest;
+  color: @on_surface;
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+button.tonal, button.filled, button.danger, button.text-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 18px;
+  font-weight: 500;
+  transition: border-radius 300ms cubic-bezier(0.05, 0.7, 0.1, 1), background-color 150ms ease;
+}
+button.tonal { background-color: @secondary_container; color: @on_secondary_container; }
+button.tonal:hover { background-color: mix(@secondary_container, @on_secondary_container, 0.08); }
+button.filled { background-color: @primary; color: @on_primary; }
+button.filled:hover { background-color: mix(@primary, @on_primary, 0.08); }
+button.danger { background-color: @error_container; color: @on_error_container; }
+button.danger:hover { background-color: mix(@error_container, @on_error_container, 0.08); }
+button.text-btn { background-color: transparent; color: @primary; padding: 0 12px; }
+button.text-btn:hover { background-color: alpha(@primary, 0.08); }
+button.tonal:disabled, button.filled:disabled, button.danger:disabled,
+button.text-btn:disabled, button.icon-btn:disabled { opacity: 0.38; }
+button.tonal:active, button.filled:active, button.danger:active, button.text-btn:active { border-radius: 12px; }
+
+/* Switch */
+.calc-prefs switch, .calculator switch {
+  background: none;
+  background-color: @surface_container_highest;
+  border: 2px solid @outline;
+  border-radius: 999px;
+  min-width: 48px;
+  min-height: 28px;
+  padding: 0;
+  box-shadow: none;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+.calc-prefs switch slider, .calculator switch slider {
+  background: none;
+  background-color: @outline;
+  border: none;
+  box-shadow: none;
+  border-radius: 999px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 6px;
+  transition: all 320ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+.calc-prefs switch:hover slider { background-color: @on_surface_variant; }
+.calc-prefs switch:checked, .calculator switch:checked {
+  background-color: @primary;
+  border-color: @primary;
+}
+.calc-prefs switch:checked slider, .calculator switch:checked slider {
+  background-color: @on_primary;
+  margin: 2px;
+}
+.calc-prefs switch:checked:hover slider { background-color: @primary_container; }
+.calc-prefs switch image { color: transparent; }
+
+/* Drop-downs and popovers */
+.calc-prefs dropdown > button, .calc-prefs colordialogbutton > button {
+  background: none;
+  background-color: @surface_container_highest;
+  color: @on_surface;
+  border: none;
+  box-shadow: none;
+  border-radius: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+.calc-prefs dropdown > button:hover, .calc-prefs colordialogbutton > button:hover {
+  background-color: mix(@surface_container_highest, @on_surface, 0.08);
+}
+
+popover.background > contents, popover > contents {
+  background-color: @surface_container;
+  color: @on_surface;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px alpha(@shadow, 0.25);
+  border: none;
+  padding: 6px;
+}
+popover > arrow { background-color: @surface_container; border: none; }
+popover listview > row, popover list > row { border-radius: 10px; padding: 8px 10px; color: @on_surface; }
+popover listview > row:hover, popover list > row:hover { background-color: alpha(@on_surface, 0.08); }
+popover listview > row:selected, popover list > row:selected {
+  background-color: @secondary_container;
+  color: @on_secondary_container;
+}
+
+tooltip, tooltip.background {
+  background-color: @inverse_surface;
+  color: @inverse_on_surface;
+  border-radius: 8px;
+  border: none;
+  box-shadow: none;
+}
+tooltip label { color: @inverse_on_surface; }
+
+/* Scrollbars */
+.calculator scrollbar, .calc-prefs scrollbar { background: none; border: none; }
+.calculator scrollbar slider, .calc-prefs scrollbar slider {
+  background-color: alpha(@on_surface_variant, 0.35);
+  border-radius: 999px;
+  min-width: 6px;
+  min-height: 6px;
+  border: none;
+  margin: 2px;  /* newer themes use negative margins here; reset them */
+}
+
+/* Animations off */
+.no-motion, .no-motion * { transition: none; }
