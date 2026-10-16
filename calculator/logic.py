@@ -5,7 +5,7 @@ Pure Python with no GTK, so it can be unit-tested.
 
 import re
 
-from .engine import CalcError, evaluate, format_number, pretty, raw_number
+from .engine import CalcError, evaluate, format_number, localize, pretty, raw_number
 
 BINARY_OPS = ("+", "−", "×", "÷", "^", " mod ")
 # Tokens removed in one backspace.
@@ -22,7 +22,7 @@ _NUMBER = r"(?:\d+\.?\d*|\.\d+)(?:E−?\d+)?"
 # the operand may be negative: "5×−3" and "5×(−3)" repeat "×−3" and "×(−3)".
 _TAIL = re.compile(rf"(?<=[\d.)πe!%²³¹s])(\+|−|×|÷|\^| mod )((?:\(−{_NUMBER}\)|−?{_NUMBER})%?)$")
 _LAST_NUMBER = re.compile(_NUMBER + "$")
-_THOUSANDS = re.compile(r"\d,\d{3}(?!\d)")
+_THOUSANDS = {sep: re.compile(rf"\d{re.escape(sep)}\d{{3}}(?!\d)") for sep in ",."}
 
 
 class Calculator:
@@ -37,6 +37,8 @@ class Calculator:
         self.ans_text = ""
         self.scientific = False
         self.degrees = True
+        # Decimal symbol shown, copied and pasted: "." or ",". `expr` always uses ".".
+        self.decimal = "."
 
     # Helpers -------------------------------------------------------------
     def _ends_operand(self):
@@ -239,10 +241,12 @@ class Calculator:
     # Paste ---------------------------------------------------------------
     def paste(self, text):
         text = re.sub(r"\s+", "", text)
-        # A comma is a thousands separator in "1,000" or when the text also has
-        # a decimal point ("1,234.5"), otherwise a decimal comma ("1,5").
-        if "." in text or _THOUSANDS.search(text):
-            text = text.replace(",", "")
+        # The other symbol is a thousands separator when the decimal symbol is
+        # also present ("1,234.5") or it splits off groups of three ("1,000");
+        # otherwise it is read as a decimal point too ("1,5" with ".").
+        other = "," if self.decimal == "." else "."
+        if self.decimal in text or _THOUSANDS[other].search(text):
+            text = text.replace(other, "")
         table = {"*": "×", "/": "÷", "-": "−", ",": ".", "–": "−"}
         cleaned = "".join(table.get(c, c) for c in text)
         # "x" is multiplication, except in "exp".
@@ -259,8 +263,10 @@ class Calculator:
     # Views ---------------------------------------------------------------
     def display(self, decimals=None, grouping=True):
         if self.evaluated:
-            return format_number(self.ans, decimals=decimals, grouping=grouping)
-        return pretty(self.expr, grouping) if self.expr else "0"
+            text = format_number(self.ans, decimals=decimals, grouping=grouping)
+        else:
+            text = pretty(self.expr, grouping) if self.expr else "0"
+        return localize(text, self.decimal)
 
     def preview(self, decimals=None, grouping=True):
         """Live result while typing, or '' when there is nothing useful to show."""
@@ -272,16 +278,18 @@ class Calculator:
             value = self.evaluate(self.expr)
         except CalcError:
             return ""
-        return format_number(value, decimals=decimals, grouping=grouping)
+        return localize(format_number(value, decimals=decimals, grouping=grouping), self.decimal)
 
     def copy_text(self, decimals=None):
         if self.evaluated:
-            return format_number(self.ans, decimals=decimals, grouping=False, pretty_minus=False)
-        try:
-            value = self.evaluate(self.expr)
-            return format_number(value, decimals=decimals, grouping=False, pretty_minus=False)
-        except CalcError:
-            return self.expr
+            text = format_number(self.ans, decimals=decimals, grouping=False, pretty_minus=False)
+        else:
+            try:
+                value = self.evaluate(self.expr)
+                text = format_number(value, decimals=decimals, grouping=False, pretty_minus=False)
+            except CalcError:
+                text = self.expr
+        return localize(text, self.decimal)
 
     def use_value(self, value):
         """Insert a value (e.g. from history) into the expression."""

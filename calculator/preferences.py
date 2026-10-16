@@ -200,6 +200,9 @@ class PreferencesWindow(Gtk.Window):
         self._row(card, "Live preview", "Show the result while typing", self._switch("live_preview"))
         self._row(card, "Digit grouping", "Separate thousands with a thin space",
                   self._switch("digit_grouping"))
+        self._row(card, "Decimal separator", "Also decides how pasted numbers are read",
+                  self._segmented([("point", "Point  1.5"), ("comma", "Comma  1,5")],
+                                  "decimal_separator"))
         self._row(card, "Decimal places", None, self._dropdown(
             [(-1, "Auto")] + [(n, str(n)) for n in range(0, 11)], "decimals"))
 

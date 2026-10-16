@@ -6,7 +6,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango
 
 from . import compositor
 from .config import APP_NAME, DEFAULT_SIZES
-from .engine import format_number
+from .engine import format_number, localize
 from .icons import icon, icon_button
 from .logic import Calculator
 from .motion import Animated, KeyMotion, motion
@@ -221,6 +221,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         if tooltip:
             button.set_tooltip_text(tooltip)
         button.connect("clicked", lambda b: self.press(b._action))
+        if action == "dot:":
+            self.dot_button = button
         # "=" rests as a rounded square and turns round when pressed: the
         # inverse of the other keys.
         rest, pressed = (0.5, 1.0) if css == "equals" else (1.0, 0.5)
@@ -394,7 +396,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
 
         if self.calc.evaluated and self.calc.prev_line:
             from .engine import pretty
-            self.prev_line.set_label(pretty(self.calc.prev_line, grouping) + " =")
+            self.prev_line.set_label(
+                localize(pretty(self.calc.prev_line, grouping), self.calc.decimal) + " =")
         else:
             self.prev_line.set_label("")
 
@@ -568,15 +571,18 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             self.history_list.remove(child)
             child = nxt
         grouping = self.settings["digit_grouping"]
+        decimal = self.calc.decimal
         from .engine import pretty
         for item in self.history.items:
             row = Gtk.ListBoxRow()
             row._value = item["value"]
             box = Gtk.Box(spacing=8, css_classes=["history-row"])
             texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
-            texts.append(Gtk.Label(label=pretty(item["expr"], grouping) + " =", xalign=1,
+            texts.append(Gtk.Label(label=localize(pretty(item["expr"], grouping), decimal) + " =",
+                                   xalign=1,
                                    ellipsize=Pango.EllipsizeMode.START, css_classes=["h-expr"]))
-            texts.append(Gtk.Label(label=format_number(item["value"], grouping=grouping), xalign=1,
+            texts.append(Gtk.Label(label=localize(format_number(item["value"], grouping=grouping),
+                                                  decimal), xalign=1,
                                    ellipsize=Pango.EllipsizeMode.END, css_classes=["h-result"],
                                    selectable=False))
             box.append(texts)
@@ -643,7 +649,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         self.show_snackbar(f"Copied {text}")
 
     def _copy_value(self, value):
-        text = format_number(value, grouping=False, pretty_minus=False)
+        text = localize(format_number(value, grouping=False, pretty_minus=False), self.calc.decimal)
         self.get_clipboard().set(text)
         self.show_snackbar(f"Copied {text}")
 
@@ -682,6 +688,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             self.remove_css_class(f"keys-{size}")
         self.add_css_class(f"keys-{s['button_size']}")
         self.calc.degrees = s["angle_unit"] == "deg"
+        self.calc.decimal = "," if s["decimal_separator"] == "comma" else "."
+        self.dot_button.set_label(self.calc.decimal)
         self._update_chip()
         self._apply_motion()
 
@@ -702,6 +710,10 @@ class CalculatorWindow(Gtk.ApplicationWindow):
     def _on_setting(self, key, value):
         if key == "scientific":
             self._set_mode(value)
+        elif key == "decimal_separator":
+            self._apply_settings()
+            self._rebuild_history()
+            self.refresh()
         elif key in ("digit_grouping", "save_history"):
             self._rebuild_history()
             self.refresh()

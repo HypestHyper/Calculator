@@ -17,6 +17,7 @@ A GTK 4 calculator for Linux with a Material 3 Expressive style. It takes its co
 - Built-in palettes (Material seed colours plus Catppuccin, Nord, Gruvbox, Tokyo Night, Rosé Pine and Dracula), a custom accent colour, or a hand-written `palette.toml`.
 - The launcher icon is recoloured to match the current palette.
 - Full keyboard input.
+- Point or comma as the decimal symbol (Preferences → Display). It is used for display, copy and paste; both `.` and `,` keys type it.
 - Window size is remembered separately for each mode.
 
 ## Requirements

@@ -3,7 +3,7 @@
 import math
 import re
 
-__all__ = ["CalcError", "evaluate", "format_number", "to_internal", "pretty"]
+__all__ = ["CalcError", "evaluate", "format_number", "to_internal", "pretty", "localize"]
 
 
 class CalcError(Exception):
@@ -358,6 +358,11 @@ def raw_number(value):
         return "0"
     text = format_number(value, grouping=False, max_digits=15, pretty_minus=True)
     return text
+
+
+def localize(text, decimal="."):
+    """Show `text` (which uses "." internally) with the chosen decimal symbol."""
+    return text.replace(".", decimal) if decimal != "." else text
 
 
 _DIGIT_RUN = re.compile(r"(?<![\dE.])(\d{4,})")

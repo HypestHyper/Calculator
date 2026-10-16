@@ -149,6 +149,29 @@ class LogicTests(unittest.TestCase):
             calc.press("eq:")
             self.assertEqual(calc.display(), value, text)
 
+    def test_decimal_comma(self):
+        calc, _ = run(digits("1.5") + ["op:+"] + digits("2"))
+        calc.decimal = ","
+        self.assertEqual(calc.display(), "1,5+2")
+        self.assertEqual(calc.preview(), "3,5")
+        calc.press("eq:")
+        self.assertEqual(calc.display(), "3,5")
+        self.assertEqual(calc.copy_text(), "3,5")
+        self.assertEqual(calc.expr, "3.5")  # internal form is unchanged
+
+    def test_paste_follows_decimal_symbol(self):
+        cases = {
+            ".": {"1,5": "1.5", "1,000": "1000", "1,234.5": "1234.5", "3.14": "3.14"},
+            ",": {"1,5": "1.5", "1.000": "1000", "1.234,5": "1234.5", "3.14": "3.14",
+                  "1,000": "1.000"},
+        }
+        for decimal, pastes in cases.items():
+            for text, expr in pastes.items():
+                calc = Calculator()
+                calc.decimal = decimal
+                calc.paste(text)
+                self.assertEqual(calc.expr, expr, (decimal, text))
+
 
 if __name__ == "__main__":
     unittest.main()

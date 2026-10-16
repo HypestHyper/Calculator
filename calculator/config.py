@@ -60,6 +60,7 @@ SCHEMA = {
     "live_preview": (True, bool),
     "digit_grouping": (True, bool),
     "decimals": (-1, int),  # -1 = auto
+    "decimal_separator": ("point", ("point", "comma")),
     "angle_unit": ("deg", ("deg", "rad")),
     "motion": ("system", ("system", "expressive", "standard", "off")),
     "save_history": (True, bool),
