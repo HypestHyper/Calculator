@@ -121,9 +121,11 @@ class _Parser:
         return math.degrees(x) if self.degrees else x
 
     def tan(self, x):
-        if self.degrees and math.isclose(math.fmod(abs(x), 180.0), 90.0):
+        rad = self.to_rad(x)
+        # Odd multiples of 90° (π/2) give a huge number instead of an error.
+        if abs(math.cos(rad)) < 1e-12:
             raise CalcError("tan is undefined here")
-        return _clean_trig(math.tan(self.to_rad(x)))
+        return _clean_trig(math.tan(rad))
 
     # Token helpers -------------------------------------------------------
     def _peek(self):
@@ -339,6 +341,8 @@ def format_number(value, *, decimals=None, grouping=True, max_digits=12, pretty_
             text = f"{value:.{max_digits}f}".rstrip("0").rstrip(".")
     else:
         text = f"{value:.{decimals}f}"
+        if float(text) == 0:
+            text = text.lstrip("-")  # -0.001 at 2 decimals is "0.00", not "-0.00"
 
     if grouping:
         int_part, _, frac = text.partition(".")

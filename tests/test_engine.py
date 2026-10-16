@@ -58,6 +58,12 @@ class EngineTests(unittest.TestCase):
         for bad in ("1/0", "√(−1)", "ln(0)", "2.5!", "tan(90)", "(−8)^0.5", "", "2+", "1)"):
             with self.assertRaises(CalcError, msg=bad):
                 ev(bad)
+        for bad in ("tan(π/2)", "tan(−3π/2)"):
+            with self.assertRaises(CalcError, msg=bad):
+                ev(bad, degrees=False)
+        self.assertAlmostEqual(ev("tan(π/4)", degrees=False), 1)
+        with self.assertRaises(CalcError):
+            ev("tan(270)")
 
     def test_standard_mode_rejects_scientific(self):
         for text in ("2^3", "sin(30)", "5!", "π"):
@@ -72,6 +78,8 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(format_number(2.0, decimals=3), "2.000")
         self.assertEqual(format_number(1e20), "1E20")
         self.assertEqual(format_number(-0.0), "0")
+        self.assertEqual(format_number(-0.001, decimals=2), "0.00")
+        self.assertEqual(format_number(-0.5, decimals=0), "0")
         self.assertEqual(format_number(1.5e-9), "1.5E−9")
         self.assertEqual(ev(raw_number(1.5e-9)), 1.5e-9)
         self.assertEqual(ev(raw_number(-2.5)), -2.5)

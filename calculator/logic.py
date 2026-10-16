@@ -10,14 +10,19 @@ from .engine import CalcError, evaluate, format_number, pretty, raw_number
 BINARY_OPS = ("+", "−", "×", "÷", "^", " mod ")
 # Tokens removed in one backspace.
 MULTI_TOKENS = sorted(
-    ["asin(", "acos(", "atan(", "sin(", "cos(", "tan(", "log(", "ln(", "abs(",
+    ["asin(", "acos(", "atan(", "sin(", "cos(", "tan(", "log(", "ln(", "abs(", "exp(",
      "√(", "∛(", "Ans", "⁻¹", " mod "],
     key=len, reverse=True)
 
 _ENDS_OPERAND = re.compile(r"(?:[\d.)πe!%²³]|⁻¹|Ans)$")
 _CURRENT_NUMBER = re.compile(r"[\d.]*(?:E−?\d*)?$")
-_TAIL = re.compile(r"(\+|−|×|÷|\^| mod )((?:\d+\.?\d*|\.\d+)(?:E−?\d+)?%?)$")
-_LAST_NUMBER = re.compile(r"(?:\d+\.?\d*|\.\d+)(?:E−?\d+)?$")
+_NUMBER = r"(?:\d+\.?\d*|\.\d+)(?:E−?\d+)?"
+# The last binary operation, repeated by pressing "=" again. The operator must
+# follow an operand, so the "−" in "2E−5" or a leading "−5" is not matched, and
+# the operand may be negative: "5×−3" and "5×(−3)" repeat "×−3" and "×(−3)".
+_TAIL = re.compile(rf"(?<=[\d.)πe!%²³¹s])(\+|−|×|÷|\^| mod )((?:\(−{_NUMBER}\)|−?{_NUMBER})%?)$")
+_LAST_NUMBER = re.compile(_NUMBER + "$")
+_THOUSANDS = re.compile(r"\d,\d{3}(?!\d)")
 
 
 class Calculator:
@@ -28,6 +33,8 @@ class Calculator:
         self.prev_line = ""
         self.error = None
         self.last_tail = None
+        # Rounded text of `ans` at the start of `expr`; evaluated as the exact `ans`.
+        self.ans_text = ""
         self.scientific = False
         self.degrees = True
 
@@ -42,13 +49,26 @@ class Calculator:
         self.expr = ""
         self.evaluated = False
         self.prev_line = ""
+        self.ans_text = ""
+
+    def _show_ans(self):
+        self.expr = self.ans_text = raw_number(self.ans)
 
     def _continue_from_result(self):
-        self.expr = raw_number(self.ans)
+        self._show_ans()
         self.evaluated = False
 
+    def _exact(self, text):
+        """Swap the rounded result at the start of `text` for the exact `Ans`,
+        so 1÷3=, ×3= gives 1 rather than 0.999999999999999."""
+        seed = self.ans_text
+        if seed and text.startswith(seed) and not re.match(r"[\d.E]", text[len(seed):]):
+            return "Ans" + text[len(seed):]
+        return text
+
     def evaluate(self, text):
-        return evaluate(text, scientific=self.scientific, degrees=self.degrees, ans=self.ans)
+        return evaluate(self._exact(text), scientific=self.scientific, degrees=self.degrees,
+                        ans=self.ans)
 
     # Keys ----------------------------------------------------------------
     def press(self, action):
@@ -117,7 +137,7 @@ class Calculator:
     def _key_neg(self, _):
         if self.evaluated:
             self.ans = -self.ans
-            self.expr = raw_number(self.ans)
+            self._show_ans()
             return "ok"
         m = _LAST_NUMBER.search(self.expr)
         if m is None:
@@ -212,16 +232,23 @@ class Calculator:
         self.last_tail = m.group(0) if m else None
         self.prev_line = expr
         self.ans = value
-        self.expr = raw_number(value)
+        self._show_ans()
         self.evaluated = True
         return "result"
 
     # Paste ---------------------------------------------------------------
     def paste(self, text):
-        table = {"*": "×", "x": "×", "/": "÷", "-": "−", ",": ".", "–": "−"}
-        cleaned = "".join(table.get(c, c) for c in text.strip())
-        cleaned = re.sub(r"\s+", "", cleaned)
-        allowed = re.fullmatch(r"[\d.+−×÷^()%!πeE²³⁻¹√∛a-z]*", cleaned)
+        text = re.sub(r"\s+", "", text)
+        # A comma is a thousands separator in "1,000" or when the text also has
+        # a decimal point ("1,234.5"), otherwise a decimal comma ("1,5").
+        if "." in text or _THOUSANDS.search(text):
+            text = text.replace(",", "")
+        table = {"*": "×", "/": "÷", "-": "−", ",": ".", "–": "−"}
+        cleaned = "".join(table.get(c, c) for c in text)
+        # "x" is multiplication, except in "exp".
+        cleaned = re.sub(r"(?<!e)x|x(?!p)", "×", cleaned)
+        cleaned = cleaned.replace("mod", " mod ")
+        allowed = re.fullmatch(r"[\d.+−×÷^()%!πeE²³⁻¹√∛A-Za-z ]*", cleaned)
         if not cleaned or not allowed:
             return "ignored"
         if self.evaluated:
@@ -263,6 +290,7 @@ class Calculator:
             self.expr = text
             self.evaluated = False
             self.prev_line = ""
+            self.ans_text = ""
         elif self._ends_with_op() or self.expr.endswith("("):
             self.expr += text
         else:

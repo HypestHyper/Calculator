@@ -95,6 +95,60 @@ class LogicTests(unittest.TestCase):
         calc.use_value(4)
         self.assertEqual(calc.expr, "4")
 
+    def test_repeat_equals_tail(self):
+        # The "−" in E notation is not a subtraction to repeat.
+        calc, _ = run(digits("2") + ["exp:", "op:−", "digit:5", "eq:", "eq:"])
+        self.assertEqual(calc.ans, 2e-5)
+        calc, _ = run(digits("3") + ["op:+", "digit:1", "exp:", "op:−", "digit:5", "eq:", "eq:"])
+        self.assertAlmostEqual(calc.ans, 3.00002)
+        # Multiplying by a negative number keeps the "×".
+        calc, _ = run(digits("5") + ["op:×", "op:−", "digit:3", "eq:", "eq:"])
+        self.assertEqual(calc.ans, 45)
+        calc, _ = run(digits("5") + ["op:×", "digit:3", "neg:", "eq:", "eq:"])
+        self.assertEqual(calc.ans, 45)
+        # A leading minus is not an operation.
+        calc, _ = run(["op:−", "digit:5", "eq:", "eq:"])
+        self.assertEqual(calc.ans, -5)
+
+    def test_result_keeps_full_precision(self):
+        calc, _ = run(digits("1") + ["op:÷", "digit:3", "eq:", "op:×", "digit:3", "eq:"])
+        self.assertEqual(calc.ans, 1)
+        calc, _ = run(digits("1") + ["op:÷", "digit:3", "eq:", "eq:"])
+        self.assertEqual(calc.last_tail, "÷3")
+        calc, _ = run(digits("1") + ["op:÷", "digit:3", "eq:", "op:×", "digit:3"])
+        self.assertEqual(calc.preview(), "1")
+        # Typing onto the rounded text uses the text as written.
+        calc, _ = run(digits("1") + ["op:÷", "digit:3", "eq:", "back:", "digit:7", "eq:"])
+        self.assertEqual(calc.ans, 0.3333333333333337)
+
+    def test_paste_names_and_commas(self):
+        cases = {
+            "exp(1)": "exp(1)",
+            "2x3": "2×3",
+            "2xsin(30)": "2×sin(30)",
+            "1,000+1": "1000+1",
+            "1,234.5": "1234.5",
+            "1,5": "1.5",
+            "Ans+1": "Ans+1",
+            "7 mod 4": "7 mod 4",
+        }
+        for text, expr in cases.items():
+            calc = Calculator()
+            calc.scientific = True
+            self.assertEqual(calc.paste(text), "ok", text)
+            self.assertEqual(calc.expr, expr)
+        calc = Calculator()
+        calc.scientific = True
+        calc.paste("exp(")
+        calc.press("back:")
+        self.assertEqual(calc.expr, "")
+        for text, value in (("exp(0)", "1"), ("7 mod 4", "3"), ("1,000+1", "1\u2009001")):
+            calc = Calculator()
+            calc.scientific = True
+            calc.paste(text)
+            calc.press("eq:")
+            self.assertEqual(calc.display(), value, text)
+
 
 if __name__ == "__main__":
     unittest.main()
