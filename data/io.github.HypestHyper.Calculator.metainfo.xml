@@ -38,6 +38,18 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="1.0.1" date="2026-10-16">
+      <description>
+        <p>Decimal separator setting and calculation fixes.</p>
+        <ul>
+          <li>New setting: point or comma as the decimal symbol</li>
+          <li>Pressing = again repeats the right operation after E notation or a negative number</li>
+          <li>Results reused in a new calculation keep their full precision</li>
+          <li>Pasting handles exp, Ans, mod and thousands separators</li>
+          <li>tan at 90° is reported as undefined in radians too</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-10-15">
       <description><p>First release.</p></description>
     </release>

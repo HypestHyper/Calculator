@@ -1,6 +1,31 @@
-# Calculator
+<p align="center">
+  <img alt="Calculator" src="data/icons/hicolor/scalable/apps/io.github.HypestHyper.Calculator.svg" width="128">
+</p>
 
-A GTK 4 calculator for Linux with a Material 3 Expressive style. It takes its colours from the desktop (dark mode and accent colour) or from a palette you choose.
+<h1 align="center">Calculator</h1>
+
+<p align="center">
+  A GTK 4 calculator for Linux with a Material 3 Expressive style. It takes its colours from the desktop (dark mode and accent colour) or from a palette you choose.
+</p>
+
+<p align="center">
+  <img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-6750A4">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-informational">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
+  <img alt="GTK 4" src="https://img.shields.io/badge/GTK-4-4A86CF">
+  <img alt="Material 3 Expressive" src="https://img.shields.io/badge/style-Material%203%20Expressive-8f7ae0">
+</p>
+
+<p align="center">
+  <a href="#installation">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a> ·
+  <a href="#colours">Colours</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+---
 
 > **AI disclosure:** This project was written almost entirely by an AI assistant, with direction and testing by the author. It works on the setups it was tested on (Hyprland), but review the code before relying on it.
 
