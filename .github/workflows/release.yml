@@ -1,0 +1,62 @@
+name: Release
+
+# Attaches a ready-to-install archive and the notes from that version's section in
+# CHANGELOG.md to a GitHub release. Runs when a tag like v1.0.2 is pushed or a release
+# is published from the Releases page, or by hand (Actions tab, Release, Run workflow):
+# it then uses the version in calculator/config.py. An existing release keeps its notes
+# and gets the archive added.
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Work out the version
+        run: |
+          v=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' calculator/config.py)
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match calculator/config.py's version $v"; exit 1
+          fi
+          grep -q "^## $v " CHANGELOG.md || { echo "CHANGELOG.md has no '## $v' section"; exit 1; }
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+      - name: Run the tests
+        run: python3 -m unittest discover tests
+      - name: Build the archive
+        run: |
+          git archive --format=tar.gz --prefix="calculator-$VERSION/" -o "calculator-$VERSION.tar.gz" HEAD \
+            -- . ':!tests' ':!.github'
+      - name: Write the release notes
+        run: |
+          awk -v head="## $VERSION " 'index($0, head) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes.md
+          cat >> notes.md <<NOTES
+
+          ## Install or update
+
+          Download **calculator-$VERSION.tar.gz** below, then:
+
+              tar xzf calculator-$VERSION.tar.gz
+              cd calculator-$VERSION
+              ./install.sh
+
+          Updating works the same way; your settings and history are kept. On Arch-based systems you can
+          build a package with \`makepkg -si\` in \`packaging/arch\` instead.
+          NOTES
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "calculator-$VERSION.tar.gz" --clobber
+          else
+            gh release create "v$VERSION" "calculator-$VERSION.tar.gz" --title "$VERSION" \
+              --notes-file notes.md --target "$GITHUB_SHA"
+          fi
