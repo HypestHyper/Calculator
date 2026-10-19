@@ -1,7 +1,7 @@
 # Maintainer: HypestHyper
 pkgname=hypest-calculator
 _appid=io.github.HypestHyper.Calculator
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="GTK 4 calculator with standard and scientific modes"
 arch=('any')

@@ -57,7 +57,12 @@ mkdir -p "$APPDIR/fonts" "$BINDIR" \
 cp -r "$SRC/calculator" "$APPDIR/calculator"
 find "$APPDIR/calculator" -name '__pycache__' -type d -prune -exec rm -rf {} +
 cp "$SRC/data/fonts/"* "$APPDIR/fonts/"
-cp "$SRC/data/$APP_ID.desktop" "$PREFIX/share/applications/"
+# Launchers often run without ~/.local/bin in PATH, so name the program by its full path.
+case "$BINDIR" in
+    *" "*) EXEC="\"$BINDIR/$APP_ID\"" ;;
+    *) EXEC="$BINDIR/$APP_ID" ;;
+esac
+sed "s|^Exec=.*|Exec=$EXEC|" "$SRC/data/$APP_ID.desktop" > "$PREFIX/share/applications/$APP_ID.desktop"
 cp "$SRC/data/$APP_ID.metainfo.xml" "$PREFIX/share/metainfo/"
 cp "$SRC/data/icons/hicolor/scalable/apps/$APP_ID.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
 cp "$SRC/data/icons/hicolor/symbolic/apps/$APP_ID-symbolic.svg" "$PREFIX/share/icons/hicolor/symbolic/apps/"

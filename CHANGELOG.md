@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 — 2026-10-19
+
+### Fixed
+
+- The app now opens from app launchers (such as Noctalia, Rofi or Fuzzel) that do not have `~/.local/bin` in their `PATH`. Before, pressing Enter on Calculator did nothing. The installer now writes the full path of the program into the menu entry; run `./install.sh` again to get the fix.
+
 ## 1.0.1 — 2026-10-16
 
 ### Added

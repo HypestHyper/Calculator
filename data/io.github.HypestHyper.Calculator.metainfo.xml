@@ -38,6 +38,9 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="1.0.2" date="2026-10-19">
+      <description><p>The app opens from launchers that do not have ~/.local/bin in their PATH.</p></description>
+    </release>
     <release version="1.0.1" date="2026-10-16">
       <description>
         <p>Decimal separator setting and calculation fixes.</p>
