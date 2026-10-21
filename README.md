@@ -69,6 +69,8 @@ cd Calculator
 
 Use `sudo ./install.sh --system` to install to `/usr/local`, or `--prefix DIR` for another location. To remove it, run `./uninstall.sh` with the same option; add `--purge` to also delete settings and history.
 
+To try the [Rust version](rust/README.md) instead, run `./install.sh --rust` (needs Rust 1.88 or newer and the GTK 4 development files). It looks and behaves the same and keeps your settings and history. Run `./install.sh` again to go back to the Python version.
+
 On Arch-based systems you can build a package from `packaging/arch/PKGBUILD` instead.
 
 To run from the source folder without installing: `python3 -m calculator`.
@@ -183,7 +185,7 @@ CALCULATOR_DEBUG=1 python3 -m calculator   # print theme and window-size details
 | `calculator/app_icon.py` | Palette-coloured app icon |
 | `calculator/style.css` | Styles; colours are filled in at runtime |
 
-A Rust port is in progress in [`rust/`](rust/README.md). It does not replace the Python app yet.
+A complete Rust port lives in [`rust/`](rust/README.md); `./install.sh --rust` installs it. The Python version stays the default.
 
 ## License
 

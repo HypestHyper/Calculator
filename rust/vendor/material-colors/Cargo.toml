@@ -1,0 +1,22 @@
+# Vendored copy of material-colors 0.5.0 (https://crates.io/crates/material-colors),
+# trimmed and patched; see README.md.
+[package]
+name = "material-colors"
+version = "0.5.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+description = "Material color utilities (vendored, trimmed and patched for Calculator)"
+publish = false
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+# Declared so the original source's cfg attributes stay valid; not supported here.
+quantize = []
+serde = []
+libm = []
+
+[lints.rust]
+unexpected_cfgs = "allow"

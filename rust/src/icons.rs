@@ -29,11 +29,31 @@ fn lookup(name: &str) -> (u32, &'static str) {
         "settings" => (0xE8B8, "emblem-system-symbolic"),
         "calculate" => (0xEA5F, "accessories-calculator-symbolic"),
         "function" => (0xF866, "view-more-symbolic"),
+        "science" => (0xEA4B, "view-more-symbolic"),
         "content_copy" => (0xE14D, "edit-copy-symbolic"),
         "delete_sweep" => (0xE16C, "user-trash-symbolic"),
         "close" => (0xE5CD, "window-close-symbolic"),
+        "check" => (0xE668, "object-select-symbolic"),
+        "palette" => (0xE40A, "applications-graphics-symbolic"),
         "history_toggle_off" => (0xF17D, "document-open-recent-symbolic"),
-        _ => panic!("unknown icon {name}"),
+        "dark_mode" => (0xE51C, "weather-clear-night-symbolic"),
+        "light_mode" => (0xE518, "weather-clear-symbolic"),
+        "contrast" => (0xEB37, "display-brightness-symbolic"),
+        "animation" => (0xE71C, "media-playback-start-symbolic"),
+        "tune" => (0xE429, "preferences-system-symbolic"),
+        "info" => (0xE88E, "help-about-symbolic"),
+        "desktop_windows" => (0xE30C, "video-display-symbolic"),
+        "open_in_new" => (0xE89E, "document-open-symbolic"),
+        "text_fields" => (0xE262, "format-text-bold-symbolic"),
+        "grid_view" => (0xE9B0, "view-grid-symbolic"),
+        "square_foot" => (0xEA49, "view-grid-symbolic"),
+        "replay" => (0xE042, "view-refresh-symbolic"),
+        "keyboard" => (0xE312, "input-keyboard-symbolic"),
+        "drag_indicator" => (0xE945, "list-drag-handle-symbolic"),
+        _ => {
+            eprintln!("calculator: unknown icon {name}");
+            (0xE88E, "image-missing-symbolic")
+        }
     }
 }
 

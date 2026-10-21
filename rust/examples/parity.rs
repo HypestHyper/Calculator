@@ -7,9 +7,14 @@
 //!   fmt   <value bits> <decimals or -> <grouping 0|1> <max digits> <pretty minus 0|1>
 //!   pretty <text>
 //!   keys  <scientific 0|1> <decimal> <key> <key> ...   (key "paste=<text>" or "use=<bits>")
+//!   palette  <seed hex> <style> <dark 0|1> <contrast>
+//!   preset   <key> <dark 0|1>
+//!   template <seed hex> <style> <dark 0|1>
+//!   palfile  <palette.toml text, with "\n" for newlines>
 
 use std::io::{self, BufRead, Write};
 
+use calculator::colors::{self, Roles};
 use calculator::engine::{evaluate, format_number, pretty, raw_number, Format, Options};
 use calculator::logic::{Calculator, Status};
 
@@ -35,6 +40,14 @@ fn status(s: Status) -> &'static str {
         Status::Error => "error",
         Status::Ignored => "ignored",
     }
+}
+
+fn roles_line(roles: &Roles) -> String {
+    roles
+        .iter()
+        .map(|(role, hex)| format!("{role}={hex}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn main() {
@@ -94,6 +107,39 @@ fn main() {
                     calc.copy_text(None),
                 )
             }
+            "palette" => {
+                let seed = colors::parse_hex(f[1]).unwrap();
+                roles_line(&colors::generate_palette(
+                    seed,
+                    flag(f[3]),
+                    f[4].parse().unwrap(),
+                    f[2],
+                ))
+            }
+            "preset" => {
+                let preset = colors::preset(f[1]).unwrap();
+                let own = preset
+                    .roles(flag(f[2]))
+                    .map_or("-".to_string(), |r| roles_line(&r));
+                format!("{}|{}|{}|{own}", preset.name, preset.seed, preset.style)
+            }
+            "template" => {
+                let seed = colors::parse_hex(f[1]).unwrap();
+                let roles = colors::generate_palette(seed, flag(f[3]), 0.0, f[2]);
+                colors::palette_template(&roles, seed, f[2], flag(f[3])).replace('\n', "\\n")
+            }
+            "palfile" => match colors::parse_palette(&f[1].replace("\\n", "\n")) {
+                None => "none".to_string(),
+                Some(p) => format!(
+                    "{:?}|{:?}|{:?}|{}|{}|{}",
+                    p.seed.map(colors::seed_hex),
+                    p.style,
+                    p.mode,
+                    roles_line(&p.roles),
+                    roles_line(&p.light),
+                    roles_line(&p.dark)
+                ),
+            },
             other => panic!("unknown case {other}"),
         };
         writeln!(out, "{answer}").unwrap();

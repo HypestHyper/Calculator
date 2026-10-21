@@ -11,4 +11,10 @@ Optional runtime dependency, not included in this repository:
 | --- | --- |
 | [materialyoucolor](https://github.com/T-Dynamos/materialyoucolor-python) | MIT |
 
+Included in the Rust version (`rust/vendor/material-colors`), trimmed and patched as described in its README:
+
+| Package | License |
+| --- | --- |
+| [material-colors](https://crates.io/crates/material-colors) 0.5.0 by Aiving | MIT or Apache 2.0 |
+
 The colours of the Catppuccin, Nord, Gruvbox, Tokyo Night, Rosé Pine and Dracula presets come from those projects' published colour schemes.

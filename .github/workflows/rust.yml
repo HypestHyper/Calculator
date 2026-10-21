@@ -1,12 +1,13 @@
 name: Rust
 
 # Tests the Rust port and checks that it still behaves exactly like the Python
-# app on random input.
+# app: the calculator core on random input, and the colours for many seeds,
+# every style and every preset.
 on:
   push:
-    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", ".github/workflows/rust.yml"]
+    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", "calculator/theme.py", "calculator/presets.py", "calculator/style.css", ".github/workflows/rust.yml"]
   pull_request:
-    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", ".github/workflows/rust.yml"]
+    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", "calculator/theme.py", "calculator/presets.py", "calculator/style.css", ".github/workflows/rust.yml"]
   workflow_dispatch:
 
 jobs:
@@ -27,6 +28,16 @@ jobs:
       - run: cargo test
       - name: Compare with the Python app
         run: python3 scripts/parity.py 50000
+      - name: Compare colours with the Python app
+        run: |
+          sudo apt-get install -y python3-gi gir1.2-gtk-4.0
+          /usr/bin/python3 -m pip install --quiet --break-system-packages \
+            --target "$RUNNER_TEMP/pydeps" materialyoucolor==3.0.4
+          PYTHONPATH="$RUNNER_TEMP/pydeps" /usr/bin/python3 scripts/palette_parity.py 100
+      - name: Build with the oldest supported Rust (1.88)
+        run: |
+          rustup toolchain install 1.88 --profile minimal
+          cargo +1.88 check --all-targets
       - name: Build the app
         run: cargo build --release
       - uses: actions/upload-artifact@v4

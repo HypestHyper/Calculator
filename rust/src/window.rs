@@ -14,7 +14,7 @@ use crate::compositor;
 use crate::config::{History, Mode, Settings, Value, WindowState, APP_NAME};
 use crate::icons::{icon, icon_button};
 use crate::motion::{self, Anim, Animated, KeyMotion, Kind, Scheme};
-use crate::palette::Theme;
+use crate::theme::Theme;
 
 /// A closure that holds the window weakly and does nothing once it is gone.
 macro_rules! on {
@@ -270,6 +270,7 @@ pub struct Win {
     snack_anim: Animated,
 
     snack_timeout: RefCell<Option<glib::SourceId>>,
+    on_preferences: RefCell<Option<Rc<dyn Fn()>>>,
     resize_save: RefCell<Option<glib::SourceId>>,
     mode_changed_at: Cell<i64>,
     shrunk_for_switch: Cell<bool>,
@@ -674,6 +675,7 @@ impl Win {
             snack_label,
             snack_anim,
             snack_timeout: RefCell::default(),
+            on_preferences: RefCell::default(),
             resize_save: RefCell::default(),
             mode_changed_at: Cell::new(0),
             shrunk_for_switch: Cell::new(false),
@@ -770,6 +772,12 @@ impl Win {
                     win.refresh(None, false);
                 }
             }));
+
+        self.theme.connect(on!(self, win, || {
+            if win.settings.str("motion") == "system" {
+                win.apply_motion();
+            }
+        }));
 
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -1302,8 +1310,24 @@ impl Win {
         *self.snack_timeout.borrow_mut() = Some(id);
     }
 
-    fn show_preferences(self: &Rc<Self>) {
-        self.show_snackbar("Preferences come in a later stage of the Rust version. It shares settings with the Python app.");
+    fn show_preferences(&self) {
+        let callback = self.on_preferences.borrow().clone();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn set_preferences_handler(&self, handler: impl Fn() + 'static) {
+        *self.on_preferences.borrow_mut() = Some(Rc::new(handler));
+    }
+
+    /// Forget the remembered sizes and go back to the default for this mode.
+    pub fn reset_size(&self) {
+        let mut state = self.state.borrow_mut();
+        state.reset();
+        state.save();
+        drop(state);
+        self.apply_size_for(self.mode.get(), false);
     }
 
     // ----------------------------------------------------------- settings
@@ -1335,11 +1359,7 @@ impl Win {
 
     fn apply_motion(&self) {
         let scheme = match self.settings.str("motion").as_str() {
-            "system" => {
-                let animations =
-                    gtk::Settings::default().is_none_or(|s| s.is_gtk_enable_animations());
-                animations.then_some(Scheme::Expressive)
-            }
+            "system" => (!self.theme.reduced_motion()).then_some(Scheme::Expressive),
             "standard" => Some(Scheme::Standard),
             "expressive" => Some(Scheme::Expressive),
             _ => None,
@@ -1367,9 +1387,6 @@ impl Win {
                 self.refresh(None, false);
             }
             "decimals" | "live_preview" => self.refresh(None, false),
-            "theme" => {
-                self.theme.apply(&self.settings.str("theme"));
-            }
             _ => {
                 self.apply_settings();
                 self.refresh(None, false);

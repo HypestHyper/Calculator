@@ -402,6 +402,11 @@ impl WindowState {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.standard = Mode::Standard.default_size();
+        self.scientific = Mode::Scientific.default_size();
+    }
+
     pub fn remember(&mut self, mode: Mode, width: i32, height: i32) {
         if width > 100 && height > 100 {
             self.set(mode, (width, height));
