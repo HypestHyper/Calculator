@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 — 2026-10-21
+
+### Added
+
+- A Rust version of the app, as an option: `./install.sh --rust` builds and installs it in place of the Python version (needs Rust 1.88 or newer and the GTK 4 development files). It looks and works the same, keeps your settings and history, and starts nearly twice as fast. Run `./install.sh` again to go back. See [rust/README.md](rust/README.md).
+
+### Fixed
+
+- Closing scientific mode is now as smooth as opening it. The standard keys no longer stretch into the space the scientific panel leaves; they keep their size, and the scientific keys fade out as the panel slides away.
+
 ## 1.0.2 — 2026-10-19
 
 ### Fixed

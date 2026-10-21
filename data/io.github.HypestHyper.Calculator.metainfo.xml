@@ -38,6 +38,15 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="1.0.3" date="2026-10-21">
+      <description>
+        <p>Smoother scientific mode and an optional Rust version.</p>
+        <ul>
+          <li>Closing scientific mode no longer stretches the keys</li>
+          <li>A Rust version that looks and works the same, installed with ./install.sh --rust</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-10-19">
       <description><p>The app opens from launchers that do not have ~/.local/bin in their PATH.</p></description>
     </release>
