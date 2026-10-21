@@ -688,7 +688,7 @@ impl Win {
             standard_grid,
             pinned: Cell::new(false),
         });
-        win.apply_size_for(mode, true);
+        win.apply_size_for(mode, true, true);
         win.connect_signals();
         win.rebuild_history();
         win.apply_settings();
@@ -1019,7 +1019,7 @@ impl Win {
         }
         if scientific {
             self.unpin_standard();
-            self.apply_size_for(new_mode, false); // grow first, then slide in
+            self.apply_size_for(new_mode, false, true); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
             self.sci_revealer.set_reveal_child(true);
             self.stagger_in();
@@ -1199,7 +1199,8 @@ impl Win {
             debug("shrink skipped: window fills the screen");
             return;
         }
-        self.apply_size_for(mode, false);
+        // No compositor animation: it would stretch the keys while shrinking.
+        self.apply_size_for(mode, false, false);
         let (width, height) = self.window.default_size();
         debug(&format!(
             "shrink: asked for {width}x{height}, now {}x{}",
@@ -1464,7 +1465,7 @@ impl Win {
         state.reset();
         state.save();
         drop(state);
-        self.apply_size_for(self.mode.get(), false);
+        self.apply_size_for(self.mode.get(), false, true);
     }
 
     // ----------------------------------------------------------- settings
@@ -1532,7 +1533,7 @@ impl Win {
     }
 
     // ----------------------------------------------------------- size
-    fn apply_size_for(&self, mode: Mode, initial: bool) {
+    fn apply_size_for(&self, mode: Mode, initial: bool, animate: bool) {
         let (width, height) = self.size_for(mode);
         if initial {
             self.window.set_default_size(width, height);
@@ -1545,7 +1546,7 @@ impl Win {
         if compositor::is_hyprland() && self.window.is_mapped() {
             // Hyprland ignores the app's own request for floating windows.
             debug(&format!("asking Hyprland for {width}x{height}"));
-            compositor::hyprland_resize(width, height, Rc::new(debug), |ok| {
+            compositor::hyprland_resize(width, height, animate, Rc::new(debug), |ok| {
                 debug(&format!(
                     "Hyprland resize {}",
                     if ok { "done" } else { "failed" }

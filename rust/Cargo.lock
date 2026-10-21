@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "calculator"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "gtk4",
  "material-colors",

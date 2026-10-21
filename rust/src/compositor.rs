@@ -59,9 +59,27 @@ fn dispatch(
 }
 
 /// Resize this app's window to width x height, keeping its centre.
+/// Turn Hyprland's animations for one window off ("1") or back ("unset").
+fn set_no_anim(target: &str, value: &str, debug: Debug, callback: impl FnOnce(bool) + 'static) {
+    dispatch(
+        format!(
+            r#"hl.dsp.window.set_prop({{ prop = "no_anim", value = "{value}", window = "{target}" }})"#
+        ),
+        vec!["setprop".to_string(), format!("{target} noanim {value}")],
+        debug,
+        callback,
+    );
+}
+
+/// Resize this app's window to width x height, keeping its centre.
+///
+/// With `animate` false the change is instant. Hyprland animates a size change
+/// by drawing the window's new contents scaled to the in-between sizes, which
+/// stretches the keypad while the window shrinks.
 pub fn hyprland_resize(
     width: i32,
     height: i32,
+    animate: bool,
     debug: Debug,
     callback: impl FnOnce(bool) + 'static,
 ) {
@@ -101,6 +119,21 @@ pub fn hyprland_resize(
         let ny = (y + (h - f64::from(height)) / 2.0).round_ties_even() as i64;
         let target = format!("address:{address}");
 
+        let finish = {
+            let (target, debug) = (target.clone(), debug.clone());
+            move |ok: bool| {
+                if !animate {
+                    // Back to the user's animations once the change has happened.
+                    gtk::glib::timeout_add_local_once(
+                        std::time::Duration::from_millis(250),
+                        move || {
+                            set_no_anim(&target, "unset", debug, |_| {});
+                        },
+                    );
+                }
+                callback(ok);
+            }
+        };
         let move_lua = format!(
             r#"hl.dsp.window.move({{ x = {nx}, y = {ny}, relative = false, window = "{target}" }})"#
         );
@@ -108,22 +141,26 @@ pub fn hyprland_resize(
             "movewindowpixel".to_string(),
             format!("exact {nx} {ny},{target}"),
         ];
-        let debug2 = debug.clone();
-        dispatch(
-            format!(
-                r#"hl.dsp.window.resize({{ x = {width}, y = {height}, relative = false, window = "{target}" }})"#
-            ),
-            vec![
-                "resizewindowpixel".to_string(),
-                format!("exact {width} {height},{target}"),
-            ],
-            debug,
-            move |resized| {
-                if !resized {
-                    return callback(false);
-                }
-                dispatch(move_lua, move_classic, debug2, move |_| callback(true));
-            },
+        let resize_lua = format!(
+            r#"hl.dsp.window.resize({{ x = {width}, y = {height}, relative = false, window = "{target}" }})"#
         );
+        let resize_classic = vec![
+            "resizewindowpixel".to_string(),
+            format!("exact {width} {height},{target}"),
+        ];
+        let debug2 = debug.clone();
+        let resize = move |_| {
+            dispatch(resize_lua, resize_classic, debug2.clone(), move |resized| {
+                if !resized {
+                    return finish(false);
+                }
+                dispatch(move_lua, move_classic, debug2, move |_| finish(true));
+            });
+        };
+        if animate {
+            resize(true);
+        } else {
+            set_no_anim(&target, "1", debug, resize); // resize either way
+        }
     });
 }

@@ -598,7 +598,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         if self._fills_screen():
             _debug("shrink skipped: window fills the screen")
             return
-        self._apply_size_for(mode)
+        # No compositor animation: it would stretch the keys while shrinking.
+        self._apply_size_for(mode, animate=False)
         width, height = self.get_default_size()
         _debug(f"shrink: asked for {width}x{height}, now {self.get_width()}x{self.get_height()}")
 
@@ -811,7 +812,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             self._apply_motion()
 
     # ----------------------------------------------------------- size
-    def _apply_size_for(self, mode, initial=False):
+    def _apply_size_for(self, mode, initial=False, animate=True):
         width, height = self._size_for(mode)
         if initial:
             self.set_default_size(width, height)
@@ -823,7 +824,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             # Hyprland ignores the app's own request for floating windows.
             _debug(f"asking Hyprland for {width}x{height}")
             compositor.hyprland_resize(
-                width, height, lambda ok: _debug(f"Hyprland resize {'done' if ok else 'failed'}"), _debug)
+                width, height, lambda ok: _debug(f"Hyprland resize {'done' if ok else 'failed'}"), _debug,
+                animate=animate)
 
     def _fills_screen(self):
         """True only when the window really is maximized or fullscreen.

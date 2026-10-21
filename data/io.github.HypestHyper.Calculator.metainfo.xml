@@ -38,6 +38,15 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="1.0.4" date="2026-10-22">
+      <description>
+        <p>Window fixes.</p>
+        <ul>
+          <li>On Hyprland, the window shrinks without the compositor's animation when scientific mode closes, so the keys no longer look stretched</li>
+          <li>The minimize, maximize and close buttons show one round shape instead of a pill around the theme's own circle</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-10-21">
       <description>
         <p>Smoother scientific mode and an optional Rust version.</p>

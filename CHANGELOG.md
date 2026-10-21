@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4 — 2026-10-22
+
+### Fixed
+
+- On Hyprland, closing scientific mode no longer looks stretched. Hyprland animates a window's size change by drawing its contents scaled, so the app now turns that animation off for its own window while it shrinks, and back on right after.
+- The minimize, maximize and close buttons show a single round shape. Before, many GTK themes' own circle and outline appeared inside a second pill, and a focus ring could appear after typing.
+
 ## 1.0.3 — 2026-10-21
 
 ### Added

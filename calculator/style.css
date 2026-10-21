@@ -62,20 +62,38 @@ headerbar .title-text {
 }
 
 /* Window controls follow the palette too. */
+/* One round shape per control, drawn on the icon: GTK themes often put a
+   circle there themselves, which would otherwise sit inside a second one. */
 .calculator windowcontrols button, .calc-prefs windowcontrols button {
   background: none;
-  background-color: @surface_container_high;
   color: @on_surface_variant;
-  border-radius: 999px;
-  min-width: 28px;
-  min-height: 28px;
+  min-width: 0;
+  min-height: 0;
   margin: 0 3px;
   padding: 0;
   box-shadow: none;
   border: none;
+  outline: none;
 }
-.calculator windowcontrols button:hover, .calc-prefs windowcontrols button:hover {
+.calculator windowcontrols button > image, .calc-prefs windowcontrols button > image {
+  background: none;
+  background-color: @surface_container_high;
+  color: @on_surface_variant;
+  border-radius: 999px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 6px;
+  margin: 0;
+  box-shadow: none;
+  border: none;
+  outline: none;
+}
+.calculator windowcontrols button:hover > image, .calc-prefs windowcontrols button:hover > image {
   background-color: @surface_container_highest;
+}
+/* Typing moves GTK into keyboard-focus mode; no focus ring on these. */
+.calculator windowcontrols button:focus-visible, .calc-prefs windowcontrols button:focus-visible {
+  outline: none;
 }
 
 /* --------------------------------------------------------- icon button */
