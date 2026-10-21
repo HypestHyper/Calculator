@@ -183,6 +183,8 @@ CALCULATOR_DEBUG=1 python3 -m calculator   # print theme and window-size details
 | `calculator/app_icon.py` | Palette-coloured app icon |
 | `calculator/style.css` | Styles; colours are filled in at runtime |
 
+A Rust port is in progress in [`rust/`](rust/README.md). It does not replace the Python app yet.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). Third-party assets are listed in [THIRD_PARTY.md](THIRD_PARTY.md).

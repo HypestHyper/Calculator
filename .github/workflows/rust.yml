@@ -1,0 +1,27 @@
+name: Rust
+
+# Tests the Rust port and checks that it still behaves exactly like the Python
+# app on random input.
+on:
+  push:
+    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", ".github/workflows/rust.yml"]
+  pull_request:
+    paths: ["rust/**", "calculator/engine.py", "calculator/logic.py", ".github/workflows/rust.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - name: Compare with the Python app
+        run: python3 scripts/parity.py 50000

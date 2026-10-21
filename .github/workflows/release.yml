@@ -33,7 +33,7 @@ jobs:
       - name: Build the archive
         run: |
           git archive --format=tar.gz --prefix="calculator-$VERSION/" -o "calculator-$VERSION.tar.gz" HEAD \
-            -- . ':!tests' ':!.github'
+            -- . ':!tests' ':!.github' ':!rust'
       - name: Write the release notes
         run: |
           awk -v head="## $VERSION " 'index($0, head) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes.md
