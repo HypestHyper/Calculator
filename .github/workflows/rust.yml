@@ -20,8 +20,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - name: Install GTK 4
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - name: Compare with the Python app
         run: python3 scripts/parity.py 50000
+      - name: Build the app
+        run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calculator-rust-linux-x86_64
+          path: rust/target/release/calculator
