@@ -63,6 +63,7 @@ SCI_LETTERS = {
     "g": "func:log(", "r": "func:√(", "p": "const:π", "e": "const:e", "E": "exp:",
 }
 DEBUG = bool(os.environ.get("CALCULATOR_DEBUG"))
+SCI_PANEL_WIDTH = 280  # minimum width of the scientific keys
 
 for _d in "0123456789":
     KEYMAP[_d] = f"digit:{_d}"
@@ -243,7 +244,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
     def _build_sci_grid(self):
         grid = Gtk.Grid(row_spacing=10, column_spacing=10, row_homogeneous=True,
                         column_homogeneous=True, vexpand=True, css_classes=["sci-panel"])
-        grid.set_size_request(280, -1)
+        grid.set_size_request(SCI_PANEL_WIDTH, -1)
         self.sci_anims = []
         for r, row in enumerate(SCI_KEYS):
             for c, spec in enumerate(row):
@@ -534,6 +535,11 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         grid.set_hexpand(False)
         grid.set_halign(Gtk.Align.END)
         grid.set_size_request(start_w, -1)
+        # The scientific keys keep their size too: the sliding panel would
+        # otherwise stretch them across the space it is given.
+        sci = self.sci_revealer.get_child()
+        sci.set_size_request(sci.get_width(), -1)
+        sci.set_halign(Gtk.Align.END)
         duration = self.sci_revealer.get_transition_duration() / 1000.0
         start = None
 
@@ -569,6 +575,9 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         grid.set_size_request(-1, -1)
         grid.set_halign(Gtk.Align.FILL)
         grid.set_hexpand(True)
+        sci = self.sci_revealer.get_child()
+        sci.set_size_request(SCI_PANEL_WIDTH, -1)
+        sci.set_halign(Gtk.Align.FILL)
         if self._mode == "standard":
             self.sci_revealer.set_hexpand(False)
 
@@ -598,8 +607,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         if self._fills_screen():
             _debug("shrink skipped: window fills the screen")
             return
-        # No compositor animation: it would stretch the keys while shrinking.
-        self._apply_size_for(mode, animate=False)
+        self._apply_size_for(mode)
         width, height = self.get_default_size()
         _debug(f"shrink: asked for {width}x{height}, now {self.get_width()}x{self.get_height()}")
 
@@ -812,7 +820,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             self._apply_motion()
 
     # ----------------------------------------------------------- size
-    def _apply_size_for(self, mode, initial=False, animate=True):
+    def _apply_size_for(self, mode, initial=False):
         width, height = self._size_for(mode)
         if initial:
             self.set_default_size(width, height)
@@ -824,8 +832,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             # Hyprland ignores the app's own request for floating windows.
             _debug(f"asking Hyprland for {width}x{height}")
             compositor.hyprland_resize(
-                width, height, lambda ok: _debug(f"Hyprland resize {'done' if ok else 'failed'}"), _debug,
-                animate=animate)
+                width, height, lambda ok: _debug(f"Hyprland resize {'done' if ok else 'failed'}"), _debug)
 
     def _fills_screen(self):
         """True only when the window really is maximized or fullscreen.

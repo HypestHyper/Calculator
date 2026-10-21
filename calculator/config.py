@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_ID = "io.github.HypestHyper.Calculator"
 APP_NAME = "Calculator"
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 WEBSITE = "https://github.com/HypestHyper/Calculator"
 
 from .presets import ORDER as PRESET_KEYS  # noqa: E402

@@ -38,6 +38,11 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="1.0.5" date="2026-10-22">
+      <description>
+        <p>Closing scientific mode without stretched keys, and with a smooth shrink.</p>
+      </description>
+    </release>
     <release version="1.0.4" date="2026-10-22">
       <description>
         <p>Window fixes.</p>

@@ -1,6 +1,6 @@
 [package]
 name = "calculator"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 description = "Rust port of Calculator, a GTK 4 calculator for Linux"
 license = "MIT"

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5 — 2026-10-22
+
+### Fixed
+
+- Closing scientific mode: the scientific keys no longer stretch wider and wider as the panel slides out. They keep their size and fade away.
+- The window shrinks with Hyprland's animation again, as smoothly as it grows. 1.0.4 had turned that animation off, which made the shrink abrupt.
+
 ## 1.0.4 — 2026-10-22
 
 ### Fixed

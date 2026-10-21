@@ -319,12 +319,15 @@ fn record_frames(app: gtk::Application, win: Rc<Win>, dir: String, i: u32) {
         }
     }
     let (x, w) = win.dev_key_bounds("eq:").unwrap_or((-1.0, -1.0));
+    let (mx, mw) = win.dev_key_bounds("op: mod ").unwrap_or((-1.0, -1.0));
     println!(
-        "t={:4} ms  window {:4}  '=' key width {:3} at x={:3}",
+        "t={:4} ms  window {:4}  '=' key width {:3} at x={:3}   'mod' key width {:3} at x={:4}",
         i * 40,
         window.width(),
         w.round(),
-        x.round()
+        x.round(),
+        mw.round(),
+        mx.round()
     );
     if i >= 40 {
         app.quit();

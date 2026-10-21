@@ -211,6 +211,9 @@ fn debug(message: &str) {
     }
 }
 
+/// Minimum width of the scientific keys.
+const SCI_PANEL_WIDTH: i32 = 280;
+
 const TEXT_SIZES: [(&str, f64); 3] = [("small", 46.0), ("medium", 58.0), ("large", 70.0)];
 
 /// A keypad key whose action can change (the INV variants).
@@ -363,7 +366,7 @@ fn build_standard_grid(parts: &mut Parts) -> gtk::Grid {
 fn build_sci_grid(parts: &mut Parts) -> gtk::Grid {
     let grid = key_grid();
     grid.add_css_class("sci-panel");
-    grid.set_size_request(280, -1);
+    grid.set_size_request(SCI_PANEL_WIDTH, -1);
     for (r, row) in SCI_KEYS.iter().enumerate() {
         for (c, spec) in row.iter().enumerate() {
             let anim = match spec {
@@ -688,7 +691,7 @@ impl Win {
             standard_grid,
             pinned: Cell::new(false),
         });
-        win.apply_size_for(mode, true, true);
+        win.apply_size_for(mode, true);
         win.connect_signals();
         win.rebuild_history();
         win.apply_settings();
@@ -1019,7 +1022,7 @@ impl Win {
         }
         if scientific {
             self.unpin_standard();
-            self.apply_size_for(new_mode, false, true); // grow first, then slide in
+            self.apply_size_for(new_mode, false); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
             self.sci_revealer.set_reveal_child(true);
             self.stagger_in();
@@ -1113,6 +1116,12 @@ impl Win {
         grid.set_hexpand(false);
         grid.set_halign(gtk::Align::End);
         grid.set_size_request(start_w, -1);
+        // The scientific keys keep their size too: the sliding panel would
+        // otherwise stretch them across the space it is given.
+        if let Some(sci) = self.sci_revealer.child() {
+            sci.set_size_request(sci.width(), -1);
+            sci.set_halign(gtk::Align::End);
+        }
         let duration = f64::from(self.sci_revealer.transition_duration()) / 1000.0;
 
         let start = Cell::new(None::<f64>);
@@ -1170,6 +1179,10 @@ impl Win {
         grid.set_size_request(-1, -1);
         grid.set_halign(gtk::Align::Fill);
         grid.set_hexpand(true);
+        if let Some(sci) = self.sci_revealer.child() {
+            sci.set_size_request(SCI_PANEL_WIDTH, -1);
+            sci.set_halign(gtk::Align::Fill);
+        }
         if self.mode.get() == Mode::Standard {
             self.sci_revealer.set_hexpand(false);
         }
@@ -1199,8 +1212,7 @@ impl Win {
             debug("shrink skipped: window fills the screen");
             return;
         }
-        // No compositor animation: it would stretch the keys while shrinking.
-        self.apply_size_for(mode, false, false);
+        self.apply_size_for(mode, false);
         let (width, height) = self.window.default_size();
         debug(&format!(
             "shrink: asked for {width}x{height}, now {}x{}",
@@ -1334,7 +1346,10 @@ impl Win {
 
     /// For development: where a key is drawn, as (x, width) in the window.
     pub fn dev_key_bounds(&self, action: &str) -> Option<(f32, f32)> {
-        let key = self.key_motion.get(action)?;
+        let key = self
+            .key_motion
+            .get(action)
+            .filter(|key| key.anim.is_mapped())?;
         let bounds = key.anim.compute_bounds(&self.window)?;
         Some((bounds.x(), bounds.width()))
     }
@@ -1465,7 +1480,7 @@ impl Win {
         state.reset();
         state.save();
         drop(state);
-        self.apply_size_for(self.mode.get(), false, true);
+        self.apply_size_for(self.mode.get(), false);
     }
 
     // ----------------------------------------------------------- settings
@@ -1533,7 +1548,7 @@ impl Win {
     }
 
     // ----------------------------------------------------------- size
-    fn apply_size_for(&self, mode: Mode, initial: bool, animate: bool) {
+    fn apply_size_for(&self, mode: Mode, initial: bool) {
         let (width, height) = self.size_for(mode);
         if initial {
             self.window.set_default_size(width, height);
@@ -1546,7 +1561,7 @@ impl Win {
         if compositor::is_hyprland() && self.window.is_mapped() {
             // Hyprland ignores the app's own request for floating windows.
             debug(&format!("asking Hyprland for {width}x{height}"));
-            compositor::hyprland_resize(width, height, animate, Rc::new(debug), |ok| {
+            compositor::hyprland_resize(width, height, Rc::new(debug), |ok| {
                 debug(&format!(
                     "Hyprland resize {}",
                     if ok { "done" } else { "failed" }
