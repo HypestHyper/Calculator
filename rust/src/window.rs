@@ -276,6 +276,9 @@ pub struct Win {
     shrunk_for_switch: Cell<bool>,
     remapping: Cell<bool>,
     sheet_open: Cell<bool>,
+    standard_grid: gtk::Grid,
+    /// The standard keys are pinned while the scientific panel closes.
+    pinned: Cell<bool>,
 }
 
 /// Widgets made while building, before the window exists as an `Rc`.
@@ -530,7 +533,8 @@ impl Win {
             .build();
         sci_revealer.set_child(Some(&build_sci_grid(&mut parts)));
         sheet.append(&sci_revealer);
-        sheet.append(&build_standard_grid(&mut parts));
+        let standard_grid = build_standard_grid(&mut parts);
+        sheet.append(&standard_grid);
         root.append(&sheet);
 
         // History sheet, scrim and snackbar on top
@@ -681,6 +685,8 @@ impl Win {
             shrunk_for_switch: Cell::new(false),
             remapping: Cell::new(false),
             sheet_open: Cell::new(false),
+            standard_grid,
+            pinned: Cell::new(false),
         });
         win.apply_size_for(mode, true);
         win.connect_signals();
@@ -1012,14 +1018,17 @@ impl Win {
             .set_active(true);
         }
         if scientific {
+            self.unpin_standard();
             self.apply_size_for(new_mode, false); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
             self.sci_revealer.set_reveal_child(true);
             self.stagger_in();
         } else {
-            self.sci_revealer.set_reveal_child(false); // shrink after the slide
-                                                       // Don't rely only on the revealer's signal: shrink after the
-                                                       // slide's duration even if the signal never arrives.
+            self.pin_standard(); // the keys keep their size while the panel slides out
+            self.stagger_out();
+            // Shrink after the slide. Don't rely only on the revealer's signal:
+            // shrink after the slide's duration even if the signal never arrives.
+            self.sci_revealer.set_reveal_child(false);
             let delay = u64::from(self.sci_revealer.transition_duration()) + 60;
             let weak = Rc::downgrade(self);
             glib::timeout_add_local_once(Duration::from_millis(delay), move || {
@@ -1032,7 +1041,7 @@ impl Win {
         self.refresh(None, false);
     }
 
-    fn stagger_in(&self) {
+    fn stagger_in(self: &Rc<Self>) {
         if !motion::enabled() {
             return;
         }
@@ -1040,11 +1049,129 @@ impl Win {
             anim.scale().set(0.85);
             anim.opacity().set(0.0);
             let anim = anim.clone();
+            let weak = Rc::downgrade(self);
             let delay = 60 + (i % 4) * 18 + (i / 4) * 24;
             glib::timeout_add_local_once(Duration::from_millis(delay as u64), move || {
-                anim.scale().animate_to(1.0, Kind::Default);
-                anim.opacity().animate_to(1.0, Kind::Effects);
+                if weak
+                    .upgrade()
+                    .is_some_and(|win| win.mode.get() == Mode::Scientific)
+                {
+                    anim.scale().animate_to(1.0, Kind::Default);
+                    anim.opacity().animate_to(1.0, Kind::Effects);
+                }
             });
+        }
+    }
+
+    /// The opening's stagger in reverse: the scientific keys shrink and fade,
+    /// last key first, while the panel slides out.
+    fn stagger_out(self: &Rc<Self>) {
+        if !motion::enabled() {
+            return;
+        }
+        let count = self.sci_anims.len();
+        for (i, anim) in self.sci_anims.iter().enumerate() {
+            let j = count - 1 - i;
+            let anim = anim.clone();
+            let weak = Rc::downgrade(self);
+            let delay = (j % 4) * 12 + (j / 4) * 16;
+            glib::timeout_add_local_once(Duration::from_millis(delay as u64), move || {
+                if weak
+                    .upgrade()
+                    .is_some_and(|win| win.mode.get() == Mode::Standard)
+                {
+                    anim.scale().animate_to(0.85, Kind::Fast);
+                    anim.opacity().animate_to(0.0, Kind::Effects);
+                }
+            });
+        }
+    }
+
+    fn size_for(&self, mode: Mode) -> (i32, i32) {
+        if self.settings.bool("remember_size") {
+            self.state.borrow().size_for(mode)
+        } else {
+            mode.default_size()
+        }
+    }
+
+    /// While the scientific panel slides out and the window shrinks, keep the
+    /// standard keys at the right edge, growing smoothly to the size they will
+    /// have in standard mode, instead of stretching into the space the panel
+    /// leaves. Released once the window has shrunk.
+    fn pin_standard(self: &Rc<Self>) {
+        let grid = &self.standard_grid;
+        let start_w = grid.width();
+        if start_w <= 1 || !self.window.is_mapped() {
+            return;
+        }
+        let shrink_by = self.window.default_size().0 - self.size_for(Mode::Standard).0;
+        let min_w = grid.measure(gtk::Orientation::Horizontal, -1).0;
+        let end_w = (start_w + self.sci_revealer.width() - shrink_by).max(min_w);
+        self.pinned.set(true);
+        let pinned_window_w = self.window.width();
+        grid.set_hexpand(false);
+        grid.set_halign(gtk::Align::End);
+        grid.set_size_request(start_w, -1);
+        let duration = f64::from(self.sci_revealer.transition_duration()) / 1000.0;
+
+        let start = Cell::new(None::<f64>);
+        let weak = Rc::downgrade(self);
+        grid.add_tick_callback(move |grid, clock| {
+            if !weak.upgrade().is_some_and(|win| win.pinned.get()) {
+                return glib::ControlFlow::Break;
+            }
+            let now = clock.frame_time() as f64 / 1e6;
+            let t0 = *start.get().get_or_insert(now);
+            start.set(Some(t0));
+            let t = if duration <= 0.0 {
+                1.0
+            } else {
+                ((now - t0) / duration).min(1.0)
+            };
+            let eased = 1.0 - (1.0 - t).powi(3); // ease-out, like the panel's slide
+            let width = f64::from(start_w) + f64::from(end_w - start_w) * eased;
+            grid.set_size_request(width.round_ties_even() as i32, -1);
+            if t < 1.0 {
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
+            }
+        });
+
+        let weak = Rc::downgrade(self);
+        self.window.add_tick_callback(move |window, _| {
+            let Some(win) = weak.upgrade().filter(|win| win.pinned.get()) else {
+                return glib::ControlFlow::Break;
+            };
+            if f64::from(window.width()) <= f64::from(pinned_window_w) - f64::from(shrink_by) / 2.0
+            {
+                win.unpin_standard(); // the window has shrunk
+                return glib::ControlFlow::Break;
+            }
+            glib::ControlFlow::Continue
+        });
+        // Release anyway if the window can't shrink (maximized, or the
+        // compositor refused and the window isn't reopened).
+        let weak = Rc::downgrade(self);
+        let release = Duration::from_millis((duration * 1000.0) as u64 + 2000);
+        glib::timeout_add_local_once(release, move || {
+            if let Some(win) = weak.upgrade() {
+                win.unpin_standard();
+            }
+        });
+    }
+
+    fn unpin_standard(&self) {
+        if !self.pinned.replace(false) {
+            return;
+        }
+        let grid = &self.standard_grid;
+        grid.set_size_request(-1, -1);
+        grid.set_halign(gtk::Align::Fill);
+        grid.set_hexpand(true);
+        if self.mode.get() == Mode::Standard {
+            self.sci_revealer.set_hexpand(false);
         }
     }
 
@@ -1053,7 +1180,10 @@ impl Win {
             return;
         }
         self.shrunk_for_switch.set(true);
-        self.sci_revealer.set_hexpand(false); // expand flags propagate from the keys
+        if !self.pinned.get() {
+            // While pinned the empty panel fills the space; released with the pin.
+            self.sci_revealer.set_hexpand(false); // expand flags propagate from the keys
+        }
         self.shrink_to_mode(Mode::Standard);
     }
 
@@ -1199,6 +1329,13 @@ impl Win {
             } else {
                 "History is kept only until you close the app. You can change this in Preferences."
             });
+    }
+
+    /// For development: where a key is drawn, as (x, width) in the window.
+    pub fn dev_key_bounds(&self, action: &str) -> Option<(f32, f32)> {
+        let key = self.key_motion.get(action)?;
+        let bounds = key.anim.compute_bounds(&self.window)?;
+        Some((bounds.x(), bounds.width()))
     }
 
     /// Interface actions for the development screenshot mode.
@@ -1396,11 +1533,7 @@ impl Win {
 
     // ----------------------------------------------------------- size
     fn apply_size_for(&self, mode: Mode, initial: bool) {
-        let (width, height) = if self.settings.bool("remember_size") {
-            self.state.borrow().size_for(mode)
-        } else {
-            mode.default_size()
-        };
+        let (width, height) = self.size_for(mode);
         if initial {
             self.window.set_default_size(width, height);
             return;

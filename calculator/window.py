@@ -183,7 +183,8 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         self.sci_revealer.connect("notify::child-revealed", self._on_sci_revealed)
         self.sci_revealer.set_child(self._build_sci_grid())
         sheet.append(self.sci_revealer)
-        sheet.append(self._build_standard_grid())
+        self.standard_grid = self._build_standard_grid()
+        sheet.append(self.standard_grid)
         root.append(sheet)
 
         # History sheet, scrim and snackbar on top
@@ -465,11 +466,14 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         if self.sci_toggle.get_active() != scientific:
             (self.sci_toggle if scientific else self.std_toggle).set_active(True)
         if scientific:
+            self._unpin_standard()
             self._apply_size_for(new_mode)  # grow first, then slide in
             self.sci_revealer.set_hexpand(True)
             self.sci_revealer.set_reveal_child(True)
             self._stagger_in()
         else:
+            self._pin_standard()  # the keys keep their size while the panel slides out
+            self._stagger_out()
             self.sci_revealer.set_reveal_child(False)  # shrink after the slide
             # Don't rely only on the revealer's signal: shrink after the slide's
             # duration even if the signal never arrives.
@@ -486,10 +490,87 @@ class CalculatorWindow(Gtk.ApplicationWindow):
             anim.opacity.set(0.0)
 
             def go(a=anim):
-                a.scale.animate_to(1.0, "default")
-                a.opacity.animate_to(1.0, "effects")
+                if self._mode == "scientific":
+                    a.scale.animate_to(1.0, "default")
+                    a.opacity.animate_to(1.0, "effects")
                 return GLib.SOURCE_REMOVE
             GLib.timeout_add(60 + (i % 4) * 18 + (i // 4) * 24, go)
+
+    def _stagger_out(self):
+        """The opening's stagger in reverse: the scientific keys shrink and
+        fade, last key first, while the panel slides out."""
+        if not motion.enabled:
+            return
+        count = len(self.sci_anims)
+        for i, anim in enumerate(self.sci_anims):
+            j = count - 1 - i
+
+            def go(a=anim):
+                if self._mode == "standard":
+                    a.scale.animate_to(0.85, "fast")
+                    a.opacity.animate_to(0.0, "effects")
+                return GLib.SOURCE_REMOVE
+            GLib.timeout_add((j % 4) * 12 + (j // 4) * 16, go)
+
+    def _size_for(self, mode):
+        if self.settings["remember_size"]:
+            return self.state.size_for(mode)
+        return DEFAULT_SIZES[mode]
+
+    def _pin_standard(self):
+        """While the scientific panel slides out and the window shrinks, keep
+        the standard keys at the right edge, growing smoothly to the size they
+        will have in standard mode, instead of stretching into the space the
+        panel leaves. Released once the window has shrunk."""
+        grid = self.standard_grid
+        start_w = grid.get_width()
+        if start_w <= 1 or not self.get_mapped():
+            return
+        shrink_by = self.get_default_size()[0] - self._size_for("standard")[0]
+        end_w = start_w + self.sci_revealer.get_width() - shrink_by
+        end_w = max(grid.measure(Gtk.Orientation.HORIZONTAL, -1)[0], end_w)
+        self._pinned = True
+        self._pinned_window_w = self.get_width()
+        grid.set_hexpand(False)
+        grid.set_halign(Gtk.Align.END)
+        grid.set_size_request(start_w, -1)
+        duration = self.sci_revealer.get_transition_duration() / 1000.0
+        start = None
+
+        def grow(_widget, clock):
+            nonlocal start
+            if not getattr(self, "_pinned", False):
+                return GLib.SOURCE_REMOVE
+            now = clock.get_frame_time() / 1e6
+            start = now if start is None else start
+            t = 1.0 if duration <= 0 else min(1.0, (now - start) / duration)
+            eased = 1 - (1 - t) ** 3  # ease-out, like the panel's slide
+            grid.set_size_request(round(start_w + (end_w - start_w) * eased), -1)
+            return t < 1.0
+        grid.add_tick_callback(grow)
+
+        def watch(_widget, _clock):
+            if not getattr(self, "_pinned", False):
+                return GLib.SOURCE_REMOVE
+            if self.get_width() <= self._pinned_window_w - shrink_by / 2:
+                self._unpin_standard()  # the window has shrunk
+                return GLib.SOURCE_REMOVE
+            return GLib.SOURCE_CONTINUE
+        self.add_tick_callback(watch)
+        # Release anyway if the window can't shrink (maximized, or the
+        # compositor refused and the window isn't reopened).
+        GLib.timeout_add(int(duration * 1000) + 2000, lambda: self._unpin_standard() and False)
+
+    def _unpin_standard(self):
+        if not getattr(self, "_pinned", False):
+            return
+        self._pinned = False
+        grid = self.standard_grid
+        grid.set_size_request(-1, -1)
+        grid.set_halign(Gtk.Align.FILL)
+        grid.set_hexpand(True)
+        if self._mode == "standard":
+            self.sci_revealer.set_hexpand(False)
 
     def _on_sci_revealed(self, revealer, _pspec):
         _debug(f"scientific panel revealed={revealer.get_child_revealed()}, mode={self._mode}")
@@ -500,7 +581,9 @@ class CalculatorWindow(Gtk.ApplicationWindow):
         if self._mode != "standard" or getattr(self, "_shrunk_for_switch", False):
             return GLib.SOURCE_REMOVE
         self._shrunk_for_switch = True
-        self.sci_revealer.set_hexpand(False)  # expand flags propagate from the keys
+        if not getattr(self, "_pinned", False):
+            # While pinned the empty panel fills the space; released with the pin.
+            self.sci_revealer.set_hexpand(False)  # expand flags propagate from the keys
         self._shrink_to_mode("standard")
         return GLib.SOURCE_REMOVE
 
@@ -729,10 +812,7 @@ class CalculatorWindow(Gtk.ApplicationWindow):
 
     # ----------------------------------------------------------- size
     def _apply_size_for(self, mode, initial=False):
-        if self.settings["remember_size"]:
-            width, height = self.state.size_for(mode)
-        else:
-            width, height = DEFAULT_SIZES[mode]
+        width, height = self._size_for(mode)
         if initial:
             self.set_default_size(width, height)
             return

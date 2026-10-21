@@ -263,6 +263,10 @@ fn run_steps(app: gtk::Application, running: Rc<App>, mut steps: Vec<String>, pa
             None => win.press(&step),
         }
     }
+    if let Ok(dir) = std::env::var("CALCULATOR_FRAMES") {
+        record_frames(app, win, dir, 0);
+        return;
+    }
     glib::timeout_add_local_once(Duration::from_millis(1500), move || {
         // The preferences window when it is open, else the calculator.
         let prefs = running
@@ -290,5 +294,43 @@ fn run_steps(app: gtk::Application, running: Rc<App>, mut steps: Vec<String>, pa
             _ => eprintln!("calculator: nothing to save"),
         }
         app.quit();
+    });
+}
+
+/// For development: 40 frames, 40 ms apart, after the steps; prints the window
+/// width and where the "=" key is, and saves every other frame as a PNG.
+fn record_frames(app: gtk::Application, win: Rc<Win>, dir: String, i: u32) {
+    let window = &win.window;
+    if i.is_multiple_of(2) {
+        let paintable = gtk::WidgetPaintable::new(Some(window));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(
+            &snapshot,
+            f64::from(window.width()),
+            f64::from(window.height()),
+        );
+        if let (Some(node), Some(renderer)) = (
+            snapshot.to_node(),
+            window.native().and_then(|n| n.renderer()),
+        ) {
+            let _ = renderer
+                .render_texture(&node, None)
+                .save_to_png(format!("{dir}/f{i:03}.png"));
+        }
+    }
+    let (x, w) = win.dev_key_bounds("eq:").unwrap_or((-1.0, -1.0));
+    println!(
+        "t={:4} ms  window {:4}  '=' key width {:3} at x={:3}",
+        i * 40,
+        window.width(),
+        w.round(),
+        x.round()
+    );
+    if i >= 40 {
+        app.quit();
+        return;
+    }
+    glib::timeout_add_local_once(Duration::from_millis(40), move || {
+        record_frames(app, win, dir, i + 1)
     });
 }
