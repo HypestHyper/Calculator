@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.0.5" src="https://img.shields.io/badge/version-1.0.5-6750A4">
+  <img alt="Version 2.0.0" src="https://img.shields.io/badge/version-2.0.0-6750A4">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-informational">
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
+  <img alt="Rust 1.88+" src="https://img.shields.io/badge/rust-1.88%2B-B7410E">
   <img alt="GTK 4" src="https://img.shields.io/badge/GTK-4-4A86CF">
   <img alt="Material 3 Expressive" src="https://img.shields.io/badge/style-Material%203%20Expressive-8f7ae0">
 </p>
@@ -43,21 +43,20 @@
 - The launcher icon is recoloured to match the current palette.
 - Full keyboard input.
 - Point or comma as the decimal symbol (Preferences → Display). It is used for display, copy and paste; both `.` and `,` keys type it.
-- Window size is remembered separately for each mode.
+- Window size is remembered separately for each mode. Made smaller than its normal size, the window scales its keys and text down to fit, to about half size.
 
 ## Requirements
 
-- Python 3.11 or newer
-- GTK 4 and PyGObject
+- GTK 4.10 or newer
+- To build it: Rust 1.88 or newer and the GTK 4 development files
 
 | Distribution | Command |
 | --- | --- |
-| Arch, CachyOS, Manjaro | `sudo pacman -S python-gobject gtk4` |
-| Debian, Ubuntu | `sudo apt install python3-gi gir1.2-gtk-4.0` |
-| Fedora | `sudo dnf install python3-gobject gtk4` |
-| openSUSE | `sudo zypper install python3-gobject typelib-1_0-Gtk-4_0` |
+| Arch, CachyOS, Manjaro | `sudo pacman -S rust gtk4` |
+| Debian, Ubuntu | `sudo apt install cargo libgtk-4-dev` |
+| Fedora | `sudo dnf install cargo gtk4-devel` |
 
-Optional: [materialyoucolor](https://pypi.org/project/materialyoucolor/) generates exact Material 3 palettes. The installer fetches it into the app's own folder; without it, a built-in approximation is used.
+Without Rust, use the release download: it includes a ready-built program for x86-64 Linux.
 
 ## Installation
 
@@ -67,13 +66,15 @@ cd Calculator
 ./install.sh                  # installs to ~/.local
 ```
 
-Use `sudo ./install.sh --system` to install to `/usr/local`, or `--prefix DIR` for another location. To remove it, run `./uninstall.sh` with the same option; add `--purge` to also delete settings and history.
+The installer builds the program with cargo, then installs it with its icons, font and launcher entry. To update, run `git pull` and `./install.sh` again in the same folder. Settings and history are kept.
 
-To try the [Rust version](rust/README.md) instead, run `./install.sh --rust` (needs Rust 1.88 or newer and the GTK 4 development files). It looks and behaves the same and keeps your settings and history. Run `./install.sh` again to go back to the Python version.
+Without Rust, download `calculator-<version>.tar.gz` from the [latest release](https://github.com/HypestHyper/Calculator/releases/latest), unpack it and run `./install.sh` in its folder: it uses the ready-built program inside.
+
+Use `sudo ./install.sh --system` to install to `/usr/local` (build first as yourself with `cargo build --release`), or `--prefix DIR` for another location. To remove it, run `./uninstall.sh` with the same option; add `--purge` to also delete settings and history.
 
 On Arch-based systems you can build a package from `packaging/arch/PKGBUILD` instead.
 
-To run from the source folder without installing: `python3 -m calculator`.
+To run from the source folder without installing: `cargo run --release`.
 
 ## Floating windows on tiling compositors
 
@@ -106,7 +107,7 @@ window-rule {
 
 For other compositors, match the app ID `io.github.HypestHyper.Calculator`.
 
-The window resizes when switching modes. Hyprland ignores resize requests from floating windows, so on Hyprland the app resizes itself through `hyprctl`. On any other compositor that keeps the old size, the window is briefly reopened at the new size.
+The window resizes when switching modes. Hyprland ignores resize requests from floating windows, so on Hyprland the app resizes itself through `hyprctl`, in small steps so the window and its contents shrink together. On any other compositor that keeps the old size, the window is briefly reopened at the new size.
 
 ## Colours
 
@@ -168,24 +169,36 @@ Roles use Material 3 names such as `primary`, `on_primary`, `primary_container`,
 ## Development
 
 ```sh
-python3 -m calculator                      # run from the source folder
-python3 -m unittest discover tests         # run the tests
-CALCULATOR_DEBUG=1 python3 -m calculator   # print theme and window-size details
+cargo run --release                    # run from the source folder
+cargo test                             # run the tests
+cargo clippy --all-targets
+CALCULATOR_DEBUG=1 cargo run --release # print theme and window-size details
 ```
+
+Development builds (`cargo run` without `--release`) start as a separate app even when Calculator is already open, so they can run next to it.
+
+The app has switches for screenshots and timing:
+
+- `CALCULATOR_SCREENSHOT=out.png CALCULATOR_KEYS="digit:7 op:× digit:6 eq:"` runs the steps, saves the window as a PNG and quits. Steps are key actions or `ui:mode`, `ui:inv`, `ui:angle`, `ui:history`, `ui:prefs` (the screenshot is then of Preferences), `ui:scroll:N` (scroll Preferences), `ui:set:key=value` (change a setting), `ui:size:WxH` (resize the window) and `ui:wait` (one second).
+- `CALCULATOR_QUIT_ON_FIRST_FRAME=1` quits as soon as the window is drawn, to time start-up.
 
 | File | Purpose |
 | --- | --- |
-| `calculator/engine.py` | Expression parser and number formatting |
-| `calculator/logic.py` | Key handling |
-| `calculator/theme.py` | Desktop colour detection, palette generation, CSS |
-| `calculator/presets.py` | Built-in palettes |
-| `calculator/motion.py` | Spring animations and key press feedback |
-| `calculator/window.py`, `calculator/preferences.py` | User interface |
-| `calculator/compositor.py` | Hyprland window resizing |
-| `calculator/app_icon.py` | Palette-coloured app icon |
-| `calculator/style.css` | Styles; colours are filled in at runtime |
-
-A complete Rust port lives in [`rust/`](rust/README.md); `./install.sh --rust` installs it. The Python version stays the default.
+| `src/engine.rs` | Expression parser and number formatting |
+| `src/logic.rs` | Key handling |
+| `src/colors.rs` | Palette generation, presets, palette.toml |
+| `src/scale.rs`, `src/scale_box.rs` | Scaling down in small windows |
+| `src/main.rs` | Start-up, command-line options, development switches |
+| `src/window.rs`, `src/preferences.rs` | User interface |
+| `src/theme.rs` | Desktop colours (portal, GSettings, GTK) and CSS |
+| `src/motion.rs` | Spring animations, key shapes and press feedback |
+| `src/icons.rs` | Material Symbols icons |
+| `src/config.rs` | Settings, window sizes and history files |
+| `src/compositor.rs` | Hyprland window resizing |
+| `src/window_rules.rs` | Floating-window rules |
+| `src/app_icon.rs` | Palette-coloured app icon |
+| `src/style.css` | Styles; colours are filled in at runtime |
+| `vendor/material-colors` | Material colour library (MIT or Apache 2.0), trimmed and patched; see its README |
 
 ## License
 

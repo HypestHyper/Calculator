@@ -1,0 +1,33 @@
+name: CI
+
+# Formatting, lints and tests on every push, plus a build with the oldest
+# supported Rust. The built program is kept as a download for 30 days.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install GTK 4
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - name: Build with the oldest supported Rust (1.88)
+        run: |
+          rustup toolchain install 1.88 --profile minimal
+          cargo +1.88 check --all-targets
+      - name: Build the app
+        run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calculator-linux-x86_64
+          path: target/release/calculator
+          retention-days: 30

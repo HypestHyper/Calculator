@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0 — 2026-10-22
+
+Calculator is now written in Rust only. The Python version is gone; the Rust one looks and works the same, keeps your settings and history, and starts nearly twice as fast.
+
+To update a clone, run `git pull` and `./install.sh` in its folder. The installer needs Rust 1.88 or newer and the GTK 4 development files (`sudo pacman -S rust gtk4` on Arch). Without Rust, use the release download: it includes a ready-built program. `--rust` is still accepted and no longer needed.
+
+### Added
+
+- The window can be made much smaller: below its normal size, the keys, text and spacing scale down to fit, to about half size, and back up when the window is made larger again.
+
+### Changed
+
+- On Hyprland, leaving scientific mode shrinks the window in small steps, so the window and its contents shrink together, as smoothly as they grow. The keys stay in place until the window has reached its new size.
+- Release downloads include a ready-built program for x86-64 Linux.
+
+### Removed
+
+- The Python version, its tests and the tools that compared the two versions.
+
 ## 1.0.5 — 2026-10-22
 
 ### Fixed

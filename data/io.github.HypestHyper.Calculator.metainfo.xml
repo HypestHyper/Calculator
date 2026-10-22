@@ -38,6 +38,11 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="2.0.0" date="2026-10-22">
+      <description>
+        <p>Rust only, a window that scales down to about half size, and a smoother shrink on Hyprland.</p>
+      </description>
+    </release>
     <release version="1.0.5" date="2026-10-22">
       <description>
         <p>Closing scientific mode without stretched keys, and with a smooth shrink.</p>
