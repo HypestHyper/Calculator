@@ -218,6 +218,14 @@ fn screenshot_and_quit(app: &gtk::Application, running: Rc<App>, path: String) {
         .filter(|k| !k.is_empty())
         .map(str::to_string)
         .collect();
+    // No shadow, so the corners around the rounded window stay transparent.
+    let provider = gtk::CssProvider::new();
+    provider.load_from_data("window.csd { box-shadow: none; }");
+    gtk::style_context_add_provider_for_display(
+        &gtk::prelude::WidgetExt::display(&running.window.window),
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_USER,
+    );
     let app = app.clone();
     glib::timeout_add_local_once(Duration::from_millis(800), move || {
         run_steps(app, running, steps, path)
@@ -287,7 +295,9 @@ fn run_steps(app: gtk::Application, running: Rc<App>, mut steps: Vec<String>, pa
         let renderer = window.native().and_then(|n| n.renderer());
         match (snapshot.to_node(), renderer) {
             (Some(node), Some(renderer)) => {
-                let texture = renderer.render_texture(&node, None);
+                // Just the window: its shadow, outside, is left out.
+                let bounds = gtk::graphene::Rect::new(0.0, 0.0, w as f32, h as f32);
+                let texture = renderer.render_texture(&node, Some(&bounds));
                 if let Err(err) = texture.save_to_png(&path) {
                     eprintln!("calculator: could not save {path}: {err}");
                 }

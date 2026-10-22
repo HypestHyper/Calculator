@@ -29,8 +29,12 @@
 
 > **AI disclosure:** This project was written almost entirely by an AI assistant, with direction and testing by the author. It works on the setups it was tested on (Hyprland), but review the code before relying on it.
 
-<p>
-  <img src="docs/screenshots/standard.png" height="380" alt="Standard mode"> <img src="docs/screenshots/scientific.png" height="380" alt="Scientific mode">
+<p align="center">
+  <img src="docs/screenshots/standard.png" height="380" alt="Standard mode, Sunset palette"> <img src="docs/screenshots/scientific.png" height="380" alt="Scientific mode, Sunset palette">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/standard-catppuccin.png" height="240" alt="Catppuccin palette"> <img src="docs/screenshots/standard-forest.png" height="240" alt="Forest palette">
 </p>
 
 ## Features
