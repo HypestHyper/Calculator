@@ -191,7 +191,7 @@ The app has switches for screenshots and timing:
 
 - `CALCULATOR_SCREENSHOT=out.png CALCULATOR_KEYS="digit:7 op:× digit:6 eq:"` runs the steps, saves the window as a PNG and quits. Steps are key actions or `ui:mode`, `ui:inv`, `ui:angle`, `ui:history`, `ui:prefs` (the screenshot is then of Preferences), `ui:scroll:N` (scroll Preferences), `ui:set:key=value` (change a setting), `ui:size:WxH` (resize the window) and `ui:wait` (one second).
 - `CALCULATOR_QUIT_ON_FIRST_FRAME=1` quits as soon as the window is drawn, to time start-up.
-- `CALCULATOR_TIMING=1` prints how long each step of start-up took.
+- `CALCULATOR_TIMING=1` prints how long each step of start-up took. See [docs/startup-performance.md](docs/startup-performance.md) for what made start-up slow and what fixed it.
 - The app uses GTK's GL renderer, which starts faster than the Vulkan one newer GTK versions default to. Set `GSK_RENDERER` (for example `vulkan` or `cairo`) to choose another.
 
 | File | Purpose |
