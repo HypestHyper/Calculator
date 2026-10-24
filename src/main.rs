@@ -37,9 +37,12 @@ struct App {
 fn main() -> glib::ExitCode {
     timing::start();
     // GTK's GL renderer starts noticeably faster than its Vulkan one, the
-    // default in newer GTK versions; GSK_RENDERER still picks another.
+    // default in newer GTK versions; GSK_RENDERER still picks another. It is
+    // "ngl" up to GTK 4.16 ("gl" was an older one there) and "gl" since.
     if std::env::var_os("GSK_RENDERER").is_none() {
-        std::env::set_var("GSK_RENDERER", "ngl");
+        // SAFETY: plain version getters, valid before GTK starts.
+        let minor = unsafe { gtk::ffi::gtk_get_minor_version() };
+        std::env::set_var("GSK_RENDERER", if minor >= 17 { "gl" } else { "ngl" });
     }
     glib::set_prgname(Some(APP_ID)); // X11 WM_CLASS; Wayland uses the application ID
     glib::set_application_name(APP_NAME);

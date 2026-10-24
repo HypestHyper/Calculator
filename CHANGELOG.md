@@ -4,10 +4,14 @@
 
 ### Fixed
 
+- No warning about the GL renderer's name on newer GTK versions (it is "gl" there, "ngl" before).
 - No focus outline around the display, and along the window's edges, after typing or after opening the app again while it is already running (for example with Enter in a launcher).
 
 ### Changed
 
+- Resizing keeps the calculator's proportions: the keys keep their rounded shape at every window size, button size and in both modes, and the whole calculator scales with the window, from half to twice its normal size. Extra space goes to the display instead of stretching the keys, and the keypad stays centred.
+- Text stays readable in a small window: it shrinks less than the rest (to 70% at the smallest size, never below 12 px) and gets slightly bolder as it shrinks.
+- Opening scientific mode widens the window by exactly the scientific keys, and closing it narrows it by the same, so both modes have the same margins. The standard keys stay in place while the panel slides.
 - The suggested Hyprland rule (Preferences → Window, `--print-window-rules hyprland`) no longer has `center = true`: Hyprland opens new floating windows in the middle anyway, and the line only stopped the calculator from opening where it was last. If you copied the rule before, you can remove that line; the calculator now overrides it either way.
 - Faster start with large icon themes such as Papirus: the window no longer waits for the icon theme to load. Its minimize, maximize and close buttons are drawn with the app's own icon font, like its other icons, and follow the desktop's button layout as before. On a test machine with Papirus-Dark this saved about 300 ms.
 - Faster start: GTK's GL renderer is used instead of the Vulkan one that newer GTK versions default to. On a test with Hyprland it started about 115 ms sooner. Set `GSK_RENDERER` to choose another.

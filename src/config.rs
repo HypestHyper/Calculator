@@ -329,8 +329,8 @@ impl Settings {
 // Window state and history (JSON in the state dir)
 // --------------------------------------------------------------------------
 
-/// The scientific window is this much wider than the standard one, at the
-/// same height.
+/// By default, the scientific window is this much wider than the standard
+/// one, at the same height; remembered sizes use the panel's real width.
 pub const SCIENTIFIC_WIDTH_RATIO: f64 = 1.8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -428,20 +428,17 @@ impl WindowState {
     }
 
     /// Remember the size for `mode`, and give the other mode the same height
-    /// and the width in SCIENTIFIC_WIDTH_RATIO proportion, so switching
-    /// keeps the size the user chose.
-    pub fn remember(&mut self, mode: Mode, width: i32, height: i32) {
+    /// and a width `panel` wider (scientific) or narrower (standard): the
+    /// width of the scientific keys at this size, so switching keeps the size
+    /// the user chose and the keys fill both windows alike.
+    pub fn remember(&mut self, mode: Mode, width: i32, height: i32, panel: i32) {
         if width > 100 && height > 100 {
             self.set(mode, (width, height));
-            let other = match mode {
-                Mode::Standard => Mode::Scientific,
-                Mode::Scientific => Mode::Standard,
+            let (other, other_width) = match mode {
+                Mode::Standard => (Mode::Scientific, width + panel),
+                Mode::Scientific => (Mode::Standard, (width - panel).max(101)),
             };
-            let ratio = match mode {
-                Mode::Standard => SCIENTIFIC_WIDTH_RATIO,
-                Mode::Scientific => 1.0 / SCIENTIFIC_WIDTH_RATIO,
-            };
-            self.set(other, ((f64::from(width) * ratio).round() as i32, height));
+            self.set(other, (other_width, height));
         }
     }
 
@@ -635,9 +632,9 @@ mod tests {
     #[test]
     fn remembering_one_mode_sizes_the_other() {
         let mut state = WindowState::load(temp("ratio").join("window.json"));
-        state.remember(Mode::Standard, 250, 400);
+        state.remember(Mode::Standard, 250, 400, 200);
         assert_eq!(state.size_for(Mode::Scientific), (450, 400));
-        state.remember(Mode::Scientific, 900, 500);
+        state.remember(Mode::Scientific, 900, 500, 400);
         assert_eq!(state.size_for(Mode::Standard), (500, 500));
     }
 

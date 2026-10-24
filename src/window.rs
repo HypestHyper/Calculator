@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use calculator::engine::{format_number, localize, pretty, Format};
 use calculator::logic::{Calculator, Status};
-use calculator::scale::{choose_scale, scaled_css, MIN_SCALE, STEP};
+use calculator::scale::{choose_scale, font_factor, scaled_css, MIN_SCALE, STEP};
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, pango};
 
@@ -414,6 +414,8 @@ pub struct Win {
     history_stale: Cell<bool>,
     standard_grid: gtk::Grid,
     sci_grid: gtk::Grid,
+    /// The keypad's keys, centred on its sheet.
+    keypad: gtk::Box,
     /// The standard keys are pinned while the scientific panel closes.
     pinned: Cell<bool>,
 
@@ -425,9 +427,6 @@ pub struct Win {
     scale_pending: Cell<bool>,
     /// How the contents' minimum size follows the scale, per mode.
     size_models: Cell<[SizeModel; 2]>,
-    grow_tried: Cell<Option<[i32; 2]>>,
-    last_size: Cell<(i32, i32)>,
-    shrunk_at: Cell<i64>,
 }
 
 /// Widgets made while building, before the window exists as an `Rc`.
@@ -690,6 +689,19 @@ impl Win {
         // Keypad
         let mut parts = Parts::default();
         let sheet = gtk::Box::builder().css_classes(["keypad-sheet"]).build();
+        // The keys at their own size, centred on the sheet: the window scales
+        // them (see update_scale) instead of stretching them, so they keep
+        // their shape. Space they don't use goes to the display above.
+        let keypad = gtk::Box::builder()
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .hexpand(true)
+            .vexpand(false)
+            .build();
+        // The space the keys can be centred in; see hold_keypad.
+        let keypad_slot = gtk::Box::builder().hexpand(true).build();
+        keypad_slot.append(&keypad);
+        sheet.append(&keypad_slot);
         let sci_revealer = gtk::Revealer::builder()
             .transition_type(gtk::RevealerTransitionType::SlideRight)
             .transition_duration(320)
@@ -697,10 +709,13 @@ impl Win {
             .hexpand(calc.scientific)
             .build();
         let sci_grid = build_sci_grid(&mut parts);
+        // Hidden while closed: a closed revealer still asks for its child's
+        // height, which would make the keypad taller than its keys.
+        sci_grid.set_visible(calc.scientific);
         sci_revealer.set_child(Some(&sci_grid));
-        sheet.append(&sci_revealer);
+        keypad.append(&sci_revealer);
         let standard_grid = build_standard_grid(&mut parts);
-        sheet.append(&standard_grid);
+        keypad.append(&standard_grid);
         root.append(&sheet);
 
         // History sheet, scrim and snackbar on top
@@ -855,6 +870,7 @@ impl Win {
             history_stale: Cell::new(false),
             standard_grid,
             sci_grid,
+            keypad,
             pinned: Cell::new(false),
             header_box,
             body_box,
@@ -862,9 +878,6 @@ impl Win {
             scale: Cell::new(1.0),
             scale_pending: Cell::new(false),
             size_models: Cell::default(),
-            grow_tried: Cell::new(None),
-            last_size: Cell::new((0, 0)),
-            shrunk_at: Cell::new(0),
         });
         gtk::style_context_add_provider_for_display(
             &WidgetExt::display(&win.window),
@@ -915,6 +928,9 @@ impl Win {
                 ));
                 if !revealer.is_child_revealed() && win.mode.get() == Mode::Standard {
                     win.shrink_after_slide();
+                }
+                if revealer.is_child_revealed() && win.mode.get() == Mode::Scientific {
+                    win.release_keypad();
                 }
             }));
         for key in self
@@ -1222,7 +1238,7 @@ impl Win {
             .iter()
             .find(|(name, _)| *name == size)
             .map_or(58.0, |(_, px)| *px)
-            * self.scale.get();
+            * font_factor(self.scale.get());
         let measure = |px: f64| {
             let attrs = pango::AttrList::new();
             attrs.insert(pango::AttrSize::new_size_absolute(
@@ -1288,6 +1304,8 @@ impl Win {
             self.unpin_standard();
             self.apply_size_for(new_mode, false); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
+            self.sci_grid.set_visible(true);
+            self.hold_keypad();
             self.sci_revealer.set_reveal_child(true);
             // A hidden panel keeps the styles it had when hidden; restyle it
             // for the current scale.
@@ -1367,54 +1385,19 @@ impl Win {
     }
 
     /// While the scientific panel slides out and the window shrinks, keep the
-    /// standard keys at the right edge, growing smoothly to the size they will
-    /// have in standard mode, instead of stretching into the space the panel
-    /// leaves. Released once the window has shrunk.
+    /// keys against the right edge, so the standard keys stay put and the
+    /// panel's keys keep their size instead of being stretched by the slide.
+    /// Released, and the keys centred again, once the window has shrunk.
     fn pin_standard(self: &Rc<Self>) {
-        let grid = &self.standard_grid;
-        let start_w = grid.width();
-        if start_w <= 1 || !self.window.is_mapped() {
+        if self.standard_grid.width() <= 1 || !self.window.is_mapped() {
             return;
         }
         let shrink_by = self.current_size().0 - self.size_for(Mode::Standard).0;
-        let min_w = grid.measure(gtk::Orientation::Horizontal, -1).0;
-        let end_w = (start_w + self.sci_revealer.width() - shrink_by).max(min_w);
         self.pinned.set(true);
         let pinned_window_w = self.window.width();
-        grid.set_hexpand(false);
-        grid.set_halign(gtk::Align::End);
-        grid.set_size_request(start_w, -1);
-        // The scientific keys keep their size too: the sliding panel would
-        // otherwise stretch them across the space it is given.
-        if let Some(sci) = self.sci_revealer.child() {
-            sci.set_size_request(sci.width(), -1);
-            sci.set_halign(gtk::Align::End);
-        }
-        let duration = f64::from(self.sci_revealer.transition_duration()) / 1000.0;
-
-        let start = Cell::new(None::<f64>);
-        let weak = Rc::downgrade(self);
-        grid.add_tick_callback(move |grid, clock| {
-            if !weak.upgrade().is_some_and(|win| win.pinned.get()) {
-                return glib::ControlFlow::Break;
-            }
-            let now = clock.frame_time() as f64 / 1e6;
-            let t0 = *start.get().get_or_insert(now);
-            start.set(Some(t0));
-            let t = if duration <= 0.0 {
-                1.0
-            } else {
-                ((now - t0) / duration).min(1.0)
-            };
-            let eased = 1.0 - (1.0 - t).powi(3); // ease-out, like the panel's slide
-            let width = f64::from(start_w) + f64::from(end_w - start_w) * eased;
-            grid.set_size_request(width.round_ties_even() as i32, -1);
-            if t < 1.0 {
-                glib::ControlFlow::Continue
-            } else {
-                glib::ControlFlow::Break
-            }
-        });
+        self.hold_keypad();
+        self.sci_grid.set_size_request(self.sci_grid.width(), -1);
+        self.sci_grid.set_halign(gtk::Align::End);
 
         let weak = Rc::downgrade(self);
         self.window.add_tick_callback(move |window, _| {
@@ -1430,28 +1413,44 @@ impl Win {
         // Release anyway if the window can't shrink (maximized, or the
         // compositor refused and the window isn't reopened).
         let weak = Rc::downgrade(self);
-        let release = Duration::from_millis((duration * 1000.0) as u64 + 2000);
-        glib::timeout_add_local_once(release, move || {
+        let release = u64::from(self.sci_revealer.transition_duration()) + 2000;
+        glib::timeout_add_local_once(Duration::from_millis(release), move || {
             if let Some(win) = weak.upgrade() {
                 win.unpin_standard();
             }
         });
     }
 
+    /// Keep the keys where they are, against the right edge, while the
+    /// scientific panel opens or closes and the window resizes around them:
+    /// centred, they would drift as the panel changes width. The gap kept on
+    /// the right is the one centring gave, so nothing moves now, and the
+    /// result is centred again once the window has its new width.
+    fn hold_keypad(&self) {
+        if self.keypad.halign() != gtk::Align::Center {
+            return;
+        }
+        let slot = self.keypad.parent().map_or(0, |slot| slot.width());
+        let gap = ((slot - self.keypad.width()) / 2).max(0);
+        self.keypad.set_margin_end(gap);
+        self.keypad.set_halign(gtk::Align::End);
+    }
+
+    fn release_keypad(&self) {
+        self.keypad.set_halign(gtk::Align::Center);
+        self.keypad.set_margin_end(0);
+    }
+
     fn unpin_standard(self: &Rc<Self>) {
         if !self.pinned.replace(false) {
             return;
         }
-        let grid = &self.standard_grid;
-        grid.set_size_request(-1, -1);
-        grid.set_halign(gtk::Align::Fill);
-        grid.set_hexpand(true);
-        if let Some(sci) = self.sci_revealer.child() {
-            sci.set_size_request(scaled(SCI_PANEL_WIDTH, self.scale.get()), -1);
-            sci.set_halign(gtk::Align::Fill);
-        }
+        self.sci_grid
+            .set_size_request(scaled(SCI_PANEL_WIDTH, self.scale.get()), -1);
+        self.sci_grid.set_halign(gtk::Align::Fill);
         if self.mode.get() == Mode::Standard {
             self.sci_revealer.set_hexpand(false);
+            self.release_keypad();
         }
         self.queue_scale();
     }
@@ -1460,6 +1459,7 @@ impl Win {
         if self.mode.get() != Mode::Standard || self.shrunk_for_switch.get() {
             return;
         }
+        self.sci_grid.set_visible(false);
         self.shrunk_for_switch.set(true);
         if !self.pinned.get() {
             // While pinned the empty panel fills the space; released with the pin.
@@ -1931,7 +1931,7 @@ impl Win {
         let (mut fixed, mut per_scale, mut full) = (model.fixed, model.per_scale, model.full);
         for i in 0..2 {
             let n = f64::from(need[i]);
-            if scale >= 1.0 {
+            if (scale - 1.0).abs() < 1e-9 {
                 full[i] = Some(n);
             } else if let Some(f) = full[i] {
                 fixed[i] = ((n - scale * f) / (1.0 - scale)).max(0.0);
@@ -1947,8 +1947,9 @@ impl Win {
         need
     }
 
-    /// Pick the largest scale whose sizes fit the window: full size in a
-    /// normal window, down to MIN_SCALE in a small one.
+    /// Pick the largest scale whose sizes fit the window, from MIN_SCALE in a
+    /// small window to MAX_SCALE in a big one. The keys keep their shape;
+    /// space the scale can't use goes to the display.
     fn update_scale(self: &Rc<Self>) {
         self.scale_pending.set(false);
         let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
@@ -1966,9 +1967,6 @@ impl Win {
         let model = self.size_model();
         let scale = self.scale.get();
         let short = need.iter().zip(available).any(|(&n, a)| n > a);
-        if short && scale >= 1.0 && self.try_grow(need, available) {
-            return;
-        }
         let avail = available.map(f64::from);
         let target = if short {
             // Doesn't fit: as far down as the sizes say, at least one step.
@@ -1976,13 +1974,6 @@ impl Win {
             target
                 .min(((scale - STEP) * 100.0).round() / 100.0)
                 .max(MIN_SCALE)
-        } else if model
-            .full
-            .iter()
-            .zip(avail)
-            .all(|(f, a)| f.is_some_and(|f| f <= a))
-        {
-            1.0 // full size fits
         } else {
             // Grow only with a little room to spare, so it never flips back and forth.
             let room = [avail[0] - 4.0, avail[1] - 4.0];
@@ -1991,40 +1982,6 @@ impl Win {
         if target != scale {
             self.apply_scale(target);
         }
-    }
-
-    /// At full scale, make room by growing the window when it is a few
-    /// pixels short of its contents, as GTK does for a window smaller than
-    /// them: unless the user has just made it smaller, or growing was already
-    /// tried for this size and didn't work (a tiled or maximized window).
-    /// Further short, the window is small on purpose and the contents scale
-    /// down instead. True if it grows.
-    fn try_grow(self: &Rc<Self>, need: [i32; 2], available: [i32; 2]) -> bool {
-        if need.iter().zip(available).any(|(&n, a)| n - a > 16) {
-            return false;
-        }
-        if glib::monotonic_time() - self.shrunk_at.get() < 1_000_000 || self.fills_screen() {
-            return false;
-        }
-        if self.grow_tried.replace(Some(need)) == Some(need) {
-            return false;
-        }
-        let (width, height) = self.current_size();
-        let width = width + (need[0] - available[0]).max(0);
-        let height = height + (need[1] - available[1]).max(0);
-        debug(&format!("growing to {width}x{height} to fit the contents"));
-        self.window.set_default_size(width, height);
-        if compositor::is_hyprland() {
-            compositor::hyprland_resize(width, height, Rc::new(debug), |_| {});
-        }
-        // Scale down instead if it didn't grow.
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(Duration::from_millis(500), move || {
-            if let Some(win) = weak.upgrade() {
-                win.queue_scale();
-            }
-        });
-        true
     }
 
     fn apply_scale(&self, scale: f64) {
@@ -2143,7 +2100,7 @@ impl Win {
         if width > 0 && height > 0 {
             self.state
                 .borrow_mut()
-                .remember(self.mode.get(), width, height);
+                .remember(self.mode.get(), width, height, self.panel_width());
         }
     }
 
@@ -2167,6 +2124,17 @@ impl Win {
             let placed = placement::prepare(method, center, size, &(Rc::new(debug) as _));
             self.placed_by_rule.set(placed);
         }
+    }
+
+    /// How much wider the scientific window is than the standard one at the
+    /// current size: its keys, which match the standard keys' width, and the
+    /// gap after them.
+    fn panel_width(&self) -> i32 {
+        let keys = self
+            .standard_grid
+            .measure(gtk::Orientation::Horizontal, -1)
+            .1;
+        keys + scaled(6, self.scale.get()) // .sci-panel's margin-right
     }
 
     /// Remember the window's size now and write it to disk.
@@ -2222,11 +2190,6 @@ impl Win {
     }
 
     fn on_resize(self: &Rc<Self>) {
-        let size = self.current_size();
-        let last = self.last_size.replace(size);
-        if size.0 < last.0 || size.1 < last.1 {
-            self.shrunk_at.set(glib::monotonic_time()); // made smaller: scale, don't grow back
-        }
         if let Some(id) = self.resize_save.borrow_mut().take() {
             id.remove();
         }

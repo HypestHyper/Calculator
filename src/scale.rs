@@ -12,10 +12,31 @@ use regex::Regex;
 
 /// The smallest factor: below it keys and text get too small to use.
 pub const MIN_SCALE: f64 = 0.5;
+/// The largest factor, for big windows.
+pub const MAX_SCALE: f64 = 2.0;
 /// Factors go in steps, so resizing restyles only now and then.
 pub const STEP: f64 = 0.05;
 /// Text never gets smaller than this, in px.
-pub const MIN_FONT: f64 = 10.0;
+pub const MIN_FONT: f64 = 12.0;
+
+/// How much text scales at a given factor. Text shrinks less than the rest,
+/// so it stays readable in a small window: at half size it is 70%.
+pub fn font_factor(scale: f64) -> f64 {
+    if scale >= 1.0 {
+        scale
+    } else {
+        scale + (1.0 - scale) * 0.4
+    }
+}
+
+/// Smaller text is drawn bolder, so its strokes don't get too thin.
+fn font_weight(weight: f64, scale: f64) -> f64 {
+    if scale >= 1.0 {
+        weight
+    } else {
+        (weight + (1.0 - scale) * 240.0).min(700.0)
+    }
+}
 
 const SCALED_PROPERTIES: [&str; 7] = [
     "font-size",
@@ -61,10 +82,11 @@ fn scoped(selector: &str) -> Option<String> {
     Some(format!("window.calculator {selector}"))
 }
 
-/// The size rules of `css` with every px length multiplied by `scale`.
-/// Empty at full size, so nothing changes there.
+/// The size rules of `css` with every px length multiplied by `scale`
+/// (text by `font_factor`), and text weights adjusted to match. Empty at
+/// full size, so nothing changes there.
 pub fn scaled_css(css: &str, scale: f64) -> String {
-    if scale >= 1.0 {
+    if (scale - 1.0).abs() < 1e-9 {
         return String::new();
     }
     let css = COMMENT.replace_all(css, "");
@@ -79,6 +101,15 @@ pub fn scaled_css(css: &str, scale: f64) -> String {
                 continue;
             };
             let (prop, value) = (prop.trim(), value.trim());
+            if prop == "font-weight" {
+                if let (Ok(weight), true) = (value.parse::<f64>(), scale < 1.0) {
+                    declarations.push(format!(
+                        "font-weight: {};",
+                        font_weight(weight, scale).round()
+                    ));
+                }
+                continue;
+            }
             if !value.contains("px") {
                 continue;
             }
@@ -92,7 +123,7 @@ pub fn scaled_css(css: &str, scale: f64) -> String {
                 let px: f64 = caps[1].parse().unwrap();
                 let mut new = px * scale;
                 if prop == "font-size" {
-                    new = new.max(px.min(MIN_FONT));
+                    new = (px * font_factor(scale)).max(px.min(MIN_FONT));
                 }
                 format!("{}px", number(new))
             });
@@ -114,16 +145,16 @@ pub fn scaled_css(css: &str, scale: f64) -> String {
 }
 
 /// The largest factor, in steps, at which `fixed + factor * per_scale` fits
-/// in `available` on both axes.
+/// in `available` on both axes, from MIN_SCALE to MAX_SCALE.
 pub fn choose_scale(available: [f64; 2], fixed: [f64; 2], per_scale: [f64; 2]) -> f64 {
-    let mut scale: f64 = 1.0;
+    let mut scale = MAX_SCALE;
     for i in 0..2 {
         if per_scale[i] > 0.0 {
             scale = scale.min((available[i] - fixed[i]) / per_scale[i]);
         }
     }
     let stepped = (scale / STEP + 1e-9).floor() * STEP;
-    (stepped.clamp(MIN_SCALE, 1.0) * 100.0).round() / 100.0
+    (stepped.clamp(MIN_SCALE, MAX_SCALE) * 100.0).round() / 100.0
 }
 
 #[cfg(test)]
@@ -140,35 +171,41 @@ mod tests {
     #[test]
     fn sizes_scale_and_stay_in_the_calculator_window() {
         let css = scaled_css(STYLE, 0.5);
-        assert!(css.contains(
-            "window.calculator button.key { min-height: 32px; min-width: 28px; font-size: 14px; }"
-        ));
-        assert!(css.contains(
-            "window.calculator.keys-compact button.key { min-height: 25px; font-size: 12px; }"
-        ));
+        // Sizes halve; text shrinks less (70%) and gets bolder.
+        assert!(css.contains("window.calculator button.key { min-height: 32px; min-width: 38px; font-size: 19.6px; font-weight: 570; }"));
         assert!(css.contains("window.calculator .keypad-sheet { border-radius: 18px 18px 0 0; padding: 8px 8px 9px 8px; }"));
-        // Text has a floor; small text keeps its size.
-        assert!(css.contains("window.calculator .prev-line { font-size: 10px; }"));
-        assert!(css.contains(
-            "window.calculator .chip { border-radius: 4px; font-size: 10px; padding: 1px 4px; }"
-        ));
+        assert!(css.contains("window.calculator .expr { font-size: 40.6px; font-weight: 520; }"));
+        // Text has a floor; weights stop at bold.
+        assert!(css.contains("window.calculator .prev-line { font-size: 12px; }"));
+        assert!(css.contains("window.calculator button.key.clear { font-weight: 700; }"));
         assert!(!css.contains("calc-prefs"));
+    }
+
+    #[test]
+    fn sizes_grow_in_big_windows() {
+        let css = scaled_css(STYLE, 1.5);
+        // Everything, text too, grows alike; weights stay.
+        assert!(css.contains(
+            "window.calculator button.key { min-height: 96px; min-width: 114px; font-size: 42px; }"
+        ));
+        assert!(!css.contains("font-weight"));
+    }
+
+    #[test]
+    fn text_shrinks_less_than_the_rest() {
+        assert_eq!(font_factor(1.0), 1.0);
+        assert_eq!(font_factor(2.0), 2.0);
+        assert!((font_factor(0.5) - 0.7).abs() < 1e-9);
     }
 
     #[test]
     fn scale_fits_the_space() {
         // 100 fixed + 300 per unit of scale: 400 fits at 1, 250 at 0.5.
-        assert_eq!(
-            choose_scale([400.0, 1000.0], [100.0, 0.0], [300.0, 100.0]),
-            1.0
-        );
-        assert_eq!(
-            choose_scale([340.0, 1000.0], [100.0, 0.0], [300.0, 100.0]),
-            0.8
-        );
-        assert_eq!(
-            choose_scale([100.0, 1000.0], [100.0, 0.0], [300.0, 100.0]),
-            MIN_SCALE
-        );
+        let fit = |width| choose_scale([width, 10_000.0], [100.0, 0.0], [300.0, 100.0]);
+        assert_eq!(fit(400.0), 1.0);
+        assert_eq!(fit(340.0), 0.8);
+        assert_eq!(fit(100.0), MIN_SCALE);
+        assert_eq!(fit(550.0), 1.5);
+        assert_eq!(fit(5000.0), MAX_SCALE);
     }
 }
