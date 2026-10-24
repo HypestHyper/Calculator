@@ -116,9 +116,22 @@ fn main() -> glib::ExitCode {
     });
 
     app.connect_is_registered_notify(|_| timing::mark("app name registered"));
+    // GTK would otherwise check the icon theme for an icon named after the
+    // app while it starts, which waits for the whole theme to load: with a
+    // large theme, or one without an icon cache, a few hundred ms.
+    // GTK only stores the name, so this is safe before it starts; the Rust
+    // binding insists on GTK running first.
+    let icon_name = std::ffi::CString::new(APP_ID).unwrap();
+    // SAFETY: a valid NUL-terminated string, which GTK copies.
+    unsafe { gtk::ffi::gtk_window_set_default_icon_name(icon_name.as_ptr()) };
     let state: Rc<RefCell<Option<Rc<App>>>> = Rc::default();
     app.connect_startup(|_| {
         timing::mark("GTK application set up");
+        if timing::enabled() {
+            let theme = gtk::IconTheme::for_display(&gtk::gdk::Display::default().unwrap());
+            theme.has_icon("window-close-symbolic");
+            timing::mark(&format!("icon theme loaded ({})", theme.theme_name()));
+        }
         icons::load_font();
         timing::mark("icon font loaded");
     });
