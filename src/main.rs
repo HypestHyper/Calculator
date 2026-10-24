@@ -43,6 +43,10 @@ fn main() -> glib::ExitCode {
     }
     glib::set_prgname(Some(APP_ID)); // X11 WM_CLASS; Wayland uses the application ID
     glib::set_application_name(APP_NAME);
+    if timing::enabled() && gtk::init().is_ok() {
+        // Otherwise GTK starts after the app registers; this times them apart.
+        timing::mark("GTK started");
+    }
 
     // One window per user. Development builds and debug
     // runs start a separate process, so they can run next to an installed
@@ -110,7 +114,7 @@ fn main() -> glib::ExitCode {
 
     let state: Rc<RefCell<Option<Rc<App>>>> = Rc::default();
     app.connect_startup(|_| {
-        timing::mark("GTK started, app registered");
+        timing::mark("app registered (and GTK started)");
         icons::load_font();
         timing::mark("icon font loaded");
     });
