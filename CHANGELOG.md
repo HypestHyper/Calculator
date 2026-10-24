@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.0.3 — 2026-10-24
+
+Starts about four times faster (400 ms to 100 ms on a Hyprland machine with the Papirus icon theme; see [docs/startup-performance.md](docs/startup-performance.md)), opens where you left it, and keeps its proportions when resized.
 
 ### Fixed
 

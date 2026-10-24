@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 2.0.2" src="https://img.shields.io/badge/version-2.0.2-6750A4">
+  <img alt="Version 2.0.3" src="https://img.shields.io/badge/version-2.0.3-6750A4">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-informational">
   <img alt="Rust 1.88+" src="https://img.shields.io/badge/rust-1.88%2B-B7410E">
