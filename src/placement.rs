@@ -158,8 +158,9 @@ fn hyprland_rule_global() -> String {
 }
 
 /// Ask Hyprland, before the window opens, to open it with its centre at
-/// `center`: a window rule added at run time, newer than the user's rules
-/// (such as `center = true`), so it wins. The window then opens in place,
+/// `center`: a window rule added at run time, newer than the user's rules,
+/// so its `move` wins (Hyprland lets a later `move` cancel an earlier
+/// `center = true`, and the other way round; so no `center` here at all). The window then opens in place,
 /// with Hyprland's own open animation, instead of being moved once it has
 /// appeared. Blocks briefly; call just before showing the window. False if
 /// Hyprland doesn't take it (a config without Lua, before 0.55).
@@ -174,7 +175,7 @@ pub fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
     let (x, y) = (f64::from(center.0) - mx, f64::from(center.1) - my);
     let class = APP_ID.replace('.', "\\\\.");
     let lua = format!(
-        r#"{global} = hl.window_rule({{ name = "{global}", match = {{ class = "^{class}$", title = "^Calculator$" }}, monitor = "{monitor}", center = false, move = {{ "{x}-(window_w*0.5)", "{y}-(window_h*0.5)" }} }})"#,
+        r#"{global} = hl.window_rule({{ name = "{global}", match = {{ class = "^{class}$", title = "^Calculator$" }}, monitor = "{monitor}", move = {{ "{x}-(window_w*0.5)", "{y}-(window_h*0.5)" }} }})"#,
         global = hyprland_rule_global(),
     );
     let reply = command_output("hyprctl", &["eval", &lua]).unwrap_or_default();
@@ -183,6 +184,31 @@ pub fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
         reply.trim()
     ));
     reply.trim() == "ok"
+}
+
+/// Whether the window's centre is within a few pixels of `center`.
+pub fn hyprland_check(center: (i32, i32), debug: Debug, done: impl FnOnce(bool) + 'static) {
+    compositor::run(&["hyprctl", "clients", "-j"], move |ok, out| {
+        let client = ok.then(|| compositor::find_client(&out, &debug)).flatten();
+        let Some(Client {
+            at: (x, y),
+            size: (w, h),
+            ..
+        }) = client
+        else {
+            return done(true); // can't tell; leave it
+        };
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let close =
+            (cx - f64::from(center.0)).abs() <= 4.0 && (cy - f64::from(center.1)).abs() <= 4.0;
+        if !close {
+            debug(&format!(
+                "opened with its centre at {cx},{cy}, not {},{}",
+                center.0, center.1
+            ));
+        }
+        done(close);
+    });
 }
 
 /// Switch this launch's position rule off once the window has opened, so it

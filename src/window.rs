@@ -1041,10 +1041,17 @@ impl Win {
                     .center
                     .filter(|_| state.placed_by.as_deref() == Some(method.key()))
             };
-            if win.placed_by_rule.get() {
-                // Opened in place; the rule's work is done.
-                glib::timeout_add_local_once(Duration::from_millis(500), || {
+            if let (true, Some(center)) = (win.placed_by_rule.get(), saved) {
+                // Opened in place; the rule's work is done. Should Hyprland
+                // have placed it elsewhere after all, move it as below.
+                let window = window.clone().upcast::<gtk::Window>();
+                glib::timeout_add_local_once(Duration::from_millis(150), move || {
                     placement::release_hyprland(Rc::new(debug));
+                    placement::hyprland_check(center, Rc::new(debug), move |placed| {
+                        if !placed {
+                            placement::restore(&window, method, center, Rc::new(debug));
+                        }
+                    });
                 });
             } else if let Some(center) = saved {
                 let window = window.clone().upcast::<gtk::Window>();
