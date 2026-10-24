@@ -8,6 +8,7 @@
 
 ### Changed
 
+- The suggested Hyprland rule (Preferences → Window, `--print-window-rules hyprland`) no longer has `center = true`: Hyprland opens new floating windows in the middle anyway, and the line only stopped the calculator from opening where it was last. If you copied the rule before, you can remove that line; the calculator now overrides it either way.
 - Faster start with large icon themes such as Papirus: the window no longer waits for the icon theme to load. Its minimize, maximize and close buttons are drawn with the app's own icon font, like its other icons, and follow the desktop's button layout as before. On a test machine with Papirus-Dark this saved about 300 ms.
 - Faster start: GTK's GL renderer is used instead of the Vulkan one that newer GTK versions default to. On a test with Hyprland it started about 115 ms sooner. Set `GSK_RENDERER` to choose another.
 - Faster start with a long history: its rows are built after the window is shown, instead of before. With a full history (100 entries) this saved 30 to 70 ms.

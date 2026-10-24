@@ -96,7 +96,6 @@ hl.window_rule({
     name = "calculator-float",
     match = { class = "^io\\.github\\.HypestHyper\\.Calculator$" },
     float = true,
-    center = true,
 })
 ```
 

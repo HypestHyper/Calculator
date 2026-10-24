@@ -1,8 +1,10 @@
 //! Window-rule snippets that make the calculator open floating.
 //!
 //! Wayland has no way for an app to ask to float, so tiling compositors need a
-//! one-line rule matching the app ID. No size is set, so the window opens at
-//! the size the calculator remembers.
+//! one-line rule matching the app ID. No size or position is set: the window
+//! opens at the size and place the calculator remembers. (Hyprland opens new
+//! floating windows in the middle anyway, so `center` would only override
+//! that.)
 
 use crate::config::APP_ID;
 
@@ -31,7 +33,7 @@ pub fn rule(key: &str) -> Option<Rule> {
             name: "Hyprland",
             file: "~/.config/hypr/hyprland.lua",
             snippet: format!(
-                "hl.window_rule({{\n    name = \"calculator-float\",\n    match = {{ class = \"^{}$\" }},\n    float = true,\n    center = true,\n}})",
+                "hl.window_rule({{\n    name = \"calculator-float\",\n    match = {{ class = \"^{}$\" }},\n    float = true,\n}})",
                 escaped.replace('\\', "\\\\")
             ),
             note: "For Hyprland's Lua config. Reload with “hyprctl reload”.",
@@ -71,7 +73,7 @@ mod tests {
     fn snippets_match_the_readme() {
         assert_eq!(
             rule("hyprland").unwrap().snippet,
-            "hl.window_rule({\n    name = \"calculator-float\",\n    match = { class = \"^io\\\\.github\\\\.HypestHyper\\\\.Calculator$\" },\n    float = true,\n    center = true,\n})"
+            "hl.window_rule({\n    name = \"calculator-float\",\n    match = { class = \"^io\\\\.github\\\\.HypestHyper\\\\.Calculator$\" },\n    float = true,\n})"
         );
         assert_eq!(
             rule("niri").unwrap().snippet,
