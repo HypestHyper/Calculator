@@ -15,7 +15,7 @@
 
 ### Added
 
-- The window opens where it was when last closed, on Hyprland, Sway, niri (floating windows; niri 25.08 or newer) and any desktop running on X11. A position that is no longer on any monitor is ignored. On GNOME and KDE Plasma under Wayland the desktop decides where windows open, so the app can't.
+- The window opens where it was when last closed, on Hyprland, Sway, niri (floating windows; niri 25.08 or newer) and any desktop running on X11. On Hyprland with a Lua config (0.55 or newer) it opens straight there, with Hyprland's own open animation, instead of opening in the middle and then moving. A position that is no longer on any monitor is ignored. On GNOME and KDE Plasma under Wayland the desktop decides where windows open, so the app can't.
 
 ## 2.0.2 — 2026-10-24
 

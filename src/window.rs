@@ -408,6 +408,8 @@ pub struct Win {
     shrunk_for_switch: Cell<bool>,
     remapping: Cell<bool>,
     sheet_open: Cell<bool>,
+    /// Hyprland was told where to open the window (placement.rs).
+    placed_by_rule: Cell<bool>,
     /// The history rows need rebuilding before the sheet is shown.
     history_stale: Cell<bool>,
     standard_grid: gtk::Grid,
@@ -849,6 +851,7 @@ impl Win {
             shrunk_for_switch: Cell::new(false),
             remapping: Cell::new(false),
             sheet_open: Cell::new(false),
+            placed_by_rule: Cell::new(false),
             history_stale: Cell::new(false),
             standard_grid,
             sci_grid,
@@ -874,6 +877,7 @@ impl Win {
             win.size_for(mode)
         ));
         win.apply_size_for(mode, true);
+        win.prepare_position();
         win.connect_signals();
         win.rebuild_history();
         win.apply_settings();
@@ -1037,7 +1041,12 @@ impl Win {
                     .center
                     .filter(|_| state.placed_by.as_deref() == Some(method.key()))
             };
-            if let Some(center) = saved {
+            if win.placed_by_rule.get() {
+                // Opened in place; the rule's work is done.
+                glib::timeout_add_local_once(Duration::from_millis(500), || {
+                    placement::release_hyprland(Rc::new(debug));
+                });
+            } else if let Some(center) = saved {
                 let window = window.clone().upcast::<gtk::Window>();
                 // Once the window manager has placed it, or the move is undone.
                 glib::timeout_add_local_once(Duration::from_millis(50), move || {
@@ -2134,6 +2143,26 @@ impl Win {
             self.state
                 .borrow_mut()
                 .remember(self.mode.get(), width, height);
+        }
+    }
+
+    /// Where the desktop can be told before the window opens (Hyprland), tell
+    /// it where the window was last time.
+    fn prepare_position(&self) {
+        if !self.settings.bool("remember_size")
+            || placement::method(&self.window) != Some(placement::Method::Hyprland)
+        {
+            return;
+        }
+        let saved = {
+            let state = self.state.borrow();
+            state
+                .center
+                .filter(|_| state.placed_by.as_deref() == Some(placement::Method::Hyprland.key()))
+        };
+        if let Some(center) = saved {
+            let placed = placement::prepare_hyprland(center, &(Rc::new(debug) as _));
+            self.placed_by_rule.set(placed);
         }
     }
 

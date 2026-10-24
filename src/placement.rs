@@ -134,18 +134,75 @@ fn own_pid() -> u64 {
 
 // ----------------------------------------------------------- Hyprland
 
+/// The Hyprland monitor that shows `point`: its name and top-left corner.
+fn hyprland_monitor_at(monitors: &str, point: (i32, i32)) -> Option<(String, f64, f64)> {
+    json_list(monitors).into_iter().find_map(|m| {
+        let scale = Some(number(&m, "scale"))
+            .filter(|s| *s > 0.0)
+            .unwrap_or(1.0);
+        // Rotated monitors (odd transforms) swap width and height.
+        let (mut w, mut h) = (number(&m, "width") / scale, number(&m, "height") / scale);
+        if m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0) % 2 == 1 {
+            std::mem::swap(&mut w, &mut h);
+        }
+        let (x, y) = (number(&m, "x"), number(&m, "y"));
+        inside(point, (x, y, w, h))
+            .then(|| Some((m.get("name")?.as_str()?.to_string(), x, y)))
+            .flatten()
+    })
+}
+
+/// The Lua global holding this launch's position rule.
+fn hyprland_rule_global() -> String {
+    format!("calculator_position_{}", own_pid())
+}
+
+/// Ask Hyprland, before the window opens, to open it with its centre at
+/// `center`: a window rule added at run time, newer than the user's rules
+/// (such as `center = true`), so it wins. The window then opens in place,
+/// with Hyprland's own open animation, instead of being moved once it has
+/// appeared. Blocks briefly; call just before showing the window. False if
+/// Hyprland doesn't take it (a config without Lua, before 0.55).
+pub fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
+    let Some(monitors) = command_output("hyprctl", &["monitors", "-j"]) else {
+        return false;
+    };
+    let Some((monitor, mx, my)) = hyprland_monitor_at(&monitors, center) else {
+        debug("saved position is off every monitor; leaving the window where it opens");
+        return true; // nothing to do, and nothing to move later either
+    };
+    let (x, y) = (f64::from(center.0) - mx, f64::from(center.1) - my);
+    let class = APP_ID.replace('.', "\\\\.");
+    let lua = format!(
+        r#"{global} = hl.window_rule({{ name = "{global}", match = {{ class = "^{class}$", title = "^Calculator$" }}, monitor = "{monitor}", center = false, move = {{ "{x}-(window_w*0.5)", "{y}-(window_h*0.5)" }} }})"#,
+        global = hyprland_rule_global(),
+    );
+    let reply = command_output("hyprctl", &["eval", &lua]).unwrap_or_default();
+    debug(&format!(
+        "hyprctl eval (position rule) -> {:?}",
+        reply.trim()
+    ));
+    reply.trim() == "ok"
+}
+
+/// Switch this launch's position rule off once the window has opened, so it
+/// doesn't place other windows (Preferences) or a later launch.
+pub fn release_hyprland(debug: Debug) {
+    let lua = format!(
+        "if {g} then {g}:set_enabled(false) end {g} = nil",
+        g = hyprland_rule_global()
+    );
+    compositor::run(&["hyprctl", "eval", &lua], move |_, out| {
+        debug(&format!(
+            "hyprctl eval (position rule off) -> {:?}",
+            out.trim()
+        ));
+    });
+}
+
 fn restore_hyprland(center: (i32, i32), debug: Debug) {
     compositor::run(&["hyprctl", "monitors", "-j"], move |ok, out| {
-        let monitors = if ok { json_list(&out) } else { Vec::new() };
-        let on_screen = monitors.iter().any(|m| {
-            let scale = Some(number(m, "scale")).filter(|s| *s > 0.0).unwrap_or(1.0);
-            // Rotated monitors (odd transforms) swap width and height.
-            let (mut w, mut h) = (number(m, "width") / scale, number(m, "height") / scale);
-            if m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0) % 2 == 1 {
-                std::mem::swap(&mut w, &mut h);
-            }
-            inside(center, (number(m, "x"), number(m, "y"), w, h))
-        });
+        let on_screen = ok && hyprland_monitor_at(&out, center).is_some();
         if !on_screen {
             debug("saved position is off every monitor; leaving the window where it opened");
             return;
