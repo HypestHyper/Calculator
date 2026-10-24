@@ -46,6 +46,9 @@ fn main() -> glib::ExitCode {
     if timing::enabled() && gtk::init().is_ok() {
         // Otherwise GTK starts after the app registers; this times them apart.
         timing::mark("GTK started");
+        if gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).is_ok() {
+            timing::mark("session bus connected");
+        }
     }
 
     // One window per user. Development builds and debug
@@ -112,9 +115,10 @@ fn main() -> glib::ExitCode {
         -1
     });
 
+    app.connect_is_registered_notify(|_| timing::mark("app name registered"));
     let state: Rc<RefCell<Option<Rc<App>>>> = Rc::default();
     app.connect_startup(|_| {
-        timing::mark("app registered (and GTK started)");
+        timing::mark("GTK application set up");
         icons::load_font();
         timing::mark("icon font loaded");
     });
