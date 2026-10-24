@@ -228,6 +228,107 @@ mod libc_signal {
     pub const SIGTERM: i32 = 15;
 }
 
+fn window_controls_box() -> gtk::Box {
+    gtk::Box::builder()
+        .spacing(10)
+        .valign(gtk::Align::Center)
+        .css_classes(["window-controls"])
+        .build()
+}
+
+/// Minimize, maximize and close buttons where the desktop's
+/// gtk-decoration-layout puts them, like GTK's own; kept up to date with it.
+fn fill_window_controls(window: &gtk::ApplicationWindow, start: &gtk::Box, end: &gtk::Box) {
+    let fill = {
+        let (window, start, end) = (window.downgrade(), start.downgrade(), end.downgrade());
+        move || {
+            let (Some(window), Some(start), Some(end)) =
+                (window.upgrade(), start.upgrade(), end.upgrade())
+            else {
+                return;
+            };
+            let layout = gtk::Settings::default()
+                .and_then(|s| s.gtk_decoration_layout())
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| ":close".to_string());
+            let (left, right) = layout.split_once(':').unwrap_or(("", &layout));
+            for (side, names) in [(&start, left), (&end, right)] {
+                while let Some(child) = side.first_child() {
+                    side.remove(&child);
+                }
+                for name in names.split(',').map(str::trim) {
+                    if let Some(button) = window_control(&window, name) {
+                        side.append(&button);
+                    }
+                }
+                side.set_visible(side.first_child().is_some());
+            }
+        }
+    };
+    fill();
+    if let Some(settings) = gtk::Settings::default() {
+        let fill = fill.clone();
+        settings.connect_gtk_decoration_layout_notify(move |_| fill());
+    }
+}
+
+fn window_control(window: &gtk::ApplicationWindow, name: &str) -> Option<gtk::Button> {
+    let (icon_name, tooltip) = match name {
+        "minimize" => ("minimize", "Minimize"),
+        "maximize" if window.is_resizable() => ("crop_square", "Maximize"),
+        "close" => ("close", "Close"),
+        _ => return None, // "icon", "menu" and unknown names: GTK shows none here either
+    };
+    let button = gtk::Button::builder()
+        .child(&icon(icon_name, 16))
+        .tooltip_text(tooltip)
+        .focus_on_click(false)
+        .css_classes(["window-control", name])
+        .build();
+    let weak = window.downgrade();
+    match name {
+        "minimize" => button.connect_clicked(move |_| {
+            if let Some(window) = weak.upgrade() {
+                window.minimize();
+            }
+        }),
+        "maximize" => {
+            // The restore icon while maximized, as GTK shows.
+            let update = {
+                let button = button.downgrade();
+                move |window: &gtk::ApplicationWindow| {
+                    if let Some(button) = button.upgrade() {
+                        let (name, tooltip) = if window.is_maximized() {
+                            ("filter_none", "Restore")
+                        } else {
+                            ("crop_square", "Maximize")
+                        };
+                        button.set_child(Some(&icon(name, 16)));
+                        button.set_tooltip_text(Some(tooltip));
+                    }
+                }
+            };
+            update(window);
+            window.connect_maximized_notify(update);
+            button.connect_clicked(move |_| {
+                if let Some(window) = weak.upgrade() {
+                    if window.is_maximized() {
+                        window.unmaximize();
+                    } else {
+                        window.maximize();
+                    }
+                }
+            })
+        }
+        _ => button.connect_clicked(move |_| {
+            if let Some(window) = weak.upgrade() {
+                window.close();
+            }
+        }),
+    };
+    Some(button)
+}
+
 /// A size in px at the given scale.
 fn scaled(px: i32, scale: f64) -> i32 {
     (f64::from(px) * scale).round() as i32
@@ -476,6 +577,16 @@ impl Win {
 
         // Header ------------------------------------------------------------
         let header = gtk::HeaderBar::new();
+        // Its own minimize, maximize and close buttons, drawn with the icon
+        // font: GTK's look their icons up in the icon theme, and the first
+        // lookup waits for the whole theme to load (a third of a second with
+        // Papirus), which would hold up the window's first frame.
+        header.set_show_title_buttons(false);
+        let controls_start = window_controls_box();
+        let controls_end = window_controls_box();
+        header.pack_start(&controls_start);
+        header.pack_end(&controls_end);
+        fill_window_controls(&window, &controls_start, &controls_end);
         header.set_title_widget(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0))); // clean top bar
         let group = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         group.add_css_class("connected-group");

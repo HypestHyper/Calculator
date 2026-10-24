@@ -116,22 +116,18 @@ fn main() -> glib::ExitCode {
     });
 
     app.connect_is_registered_notify(|_| timing::mark("app name registered"));
-    // GTK would otherwise check the icon theme for an icon named after the
-    // app while it starts, which waits for the whole theme to load: with a
-    // large theme, or one without an icon cache, a few hundred ms.
-    // GTK only stores the name, so this is safe before it starts; the Rust
-    // binding insists on GTK running first.
-    let icon_name = std::ffi::CString::new(APP_ID).unwrap();
-    // SAFETY: a valid NUL-terminated string, which GTK copies.
-    unsafe { gtk::ffi::gtk_window_set_default_icon_name(icon_name.as_ptr()) };
+    // Any icon looked up in the icon theme waits for the whole theme to load:
+    // with a large one, or one without an icon cache, a few hundred ms. GTK
+    // checks for the app's icon while it starts unless an icon is already
+    // set, and looks it up again when the window is first shown. So: set,
+    // to skip the check; cleared in startup, so showing the window doesn't
+    // wait; set again after the first frame, by when the theme has loaded
+    // in the background.
+    set_default_icon(Some(APP_ID));
     let state: Rc<RefCell<Option<Rc<App>>>> = Rc::default();
     app.connect_startup(|_| {
+        set_default_icon(None);
         timing::mark("GTK application set up");
-        if timing::enabled() {
-            let theme = gtk::IconTheme::for_display(&gtk::gdk::Display::default().unwrap());
-            theme.has_icon("window-close-symbolic");
-            timing::mark(&format!("icon theme loaded ({})", theme.theme_name()));
-        }
         icons::load_font();
         timing::mark("icon font loaded");
     });
@@ -150,6 +146,10 @@ fn main() -> glib::ExitCode {
         });
         running.window.window.present();
         timing::mark("window shown");
+        running.window.window.add_tick_callback(|_, _| {
+            glib::idle_add_local_once(|| set_default_icon(Some(APP_ID)));
+            glib::ControlFlow::Break
+        });
         // For development: quit once the first frame is drawn, to time start-up.
         let quit = std::env::var_os("CALCULATOR_QUIT_ON_FIRST_FRAME").is_some();
         if quit || timing::enabled() {
@@ -169,6 +169,15 @@ fn main() -> glib::ExitCode {
     let code = app.run();
     timing::mark("closed");
     code
+}
+
+/// The icon for windows without their own. Callable before GTK starts: GTK
+/// only stores the name then, though the Rust binding insists on GTK first.
+fn set_default_icon(name: Option<&str>) {
+    let name = name.map(|n| std::ffi::CString::new(n).unwrap());
+    let ptr = name.as_ref().map_or(std::ptr::null(), |n| n.as_ptr());
+    // SAFETY: NULL or a valid NUL-terminated string, which GTK copies.
+    unsafe { gtk::ffi::gtk_window_set_default_icon_name(ptr) };
 }
 
 fn start(app: &gtk::Application) -> Rc<App> {

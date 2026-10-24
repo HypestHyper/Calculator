@@ -103,6 +103,27 @@ headerbar .title-text {
 .calculator windowcontrols button:focus-visible, .calc-prefs windowcontrols button:focus-visible {
   outline: none;
 }
+/* The calculator's own window buttons (see window.rs), shaped like the ones
+   above: a 28 px circle. */
+.calculator button.window-control {
+  background: none;
+  background-color: @surface_container_high;
+  color: @on_surface_variant;
+  border-radius: 999px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+  border: none;
+  outline: none;
+}
+.calculator button.window-control:hover { background-color: @surface_container_highest; }
+.calculator button.window-control .msym {
+  font-size: 18px;
+  font-variation-settings: "FILL" 0, "wght" 600, "GRAD" 0, "opsz" 20;
+}
+.calculator button.window-control.maximize .msym { font-size: 14px; }
 
 /* --------------------------------------------------------- icon button */
 
