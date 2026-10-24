@@ -8,6 +8,7 @@
 
 ### Changed
 
+- Faster start: GTK's GL renderer is used instead of the Vulkan one that newer GTK versions default to. On a test with Hyprland it started about 115 ms sooner. Set `GSK_RENDERER` to choose another.
 - Faster start with a long history: its rows are built after the window is shown, instead of before. With a full history (100 entries) this saved 30 to 70 ms.
 - The window opens smaller by default: 220×330 in standard mode, 396×330 in scientific mode.
 

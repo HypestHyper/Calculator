@@ -9,6 +9,7 @@ mod placement;
 mod preferences;
 mod scale_box;
 mod theme;
+mod timing;
 mod window;
 mod window_rules;
 
@@ -34,6 +35,12 @@ struct App {
 }
 
 fn main() -> glib::ExitCode {
+    timing::start();
+    // GTK's GL renderer starts noticeably faster than its Vulkan one, the
+    // default in newer GTK versions; GSK_RENDERER still picks another.
+    if std::env::var_os("GSK_RENDERER").is_none() {
+        std::env::set_var("GSK_RENDERER", "ngl");
+    }
     glib::set_prgname(Some(APP_ID)); // X11 WM_CLASS; Wayland uses the application ID
     glib::set_application_name(APP_NAME);
 
@@ -103,7 +110,9 @@ fn main() -> glib::ExitCode {
 
     let state: Rc<RefCell<Option<Rc<App>>>> = Rc::default();
     app.connect_startup(|_| {
+        timing::mark("GTK started, app registered");
         icons::load_font();
+        timing::mark("icon font loaded");
     });
     app.connect_activate(move |app| {
         if print_palette.get() {
@@ -119,11 +128,16 @@ fn main() -> glib::ExitCode {
             running
         });
         running.window.window.present();
+        timing::mark("window shown");
         // For development: quit once the first frame is drawn, to time start-up.
-        if std::env::var_os("CALCULATOR_QUIT_ON_FIRST_FRAME").is_some() {
+        let quit = std::env::var_os("CALCULATOR_QUIT_ON_FIRST_FRAME").is_some();
+        if quit || timing::enabled() {
             let app = app.clone();
             running.window.window.add_tick_callback(move |_, _| {
-                app.quit();
+                timing::mark("first frame");
+                if quit {
+                    app.quit();
+                }
                 glib::ControlFlow::Break
             });
         }
@@ -131,7 +145,9 @@ fn main() -> glib::ExitCode {
             screenshot_and_quit(app, running.clone(), path);
         }
     });
-    app.run()
+    let code = app.run();
+    timing::mark("closed");
+    code
 }
 
 fn start(app: &gtk::Application) -> Rc<App> {
@@ -143,8 +159,11 @@ fn start(app: &gtk::Application) -> Rc<App> {
     }
     let settings = Settings::load_default();
     let history = History::load_default(settings.bool("save_history"));
+    timing::mark("settings and history read");
     let theme = Theme::new(settings.clone());
+    timing::mark("colours ready");
     let window = Win::new(app, settings.clone(), history.clone(), theme.clone());
+    timing::mark("window built");
     let running = Rc::new(App {
         settings,
         history,

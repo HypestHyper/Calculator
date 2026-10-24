@@ -87,7 +87,9 @@ impl Desktop {
             theme_accent: Cell::new(None),
         });
         desktop.read_theme_colors();
+        crate::timing::mark("  GSettings read");
         desktop.setup_portal(on_change.clone());
+        crate::timing::mark("  desktop portal read");
         if let Some(gsettings) = &desktop.gsettings {
             let weak = Rc::downgrade(&desktop);
             let changed = on_change.clone();
