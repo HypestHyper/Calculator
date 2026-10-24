@@ -15,6 +15,7 @@ use crate::compositor;
 use crate::config::{History, Mode, Settings, Value, WindowState, APP_NAME};
 use crate::icons::{icon, icon_button};
 use crate::motion::{self, Anim, Animated, KeyMotion, Kind, Scheme};
+use crate::placement;
 use crate::scale_box::ScaleBox;
 use crate::theme::{Theme, STYLE};
 
@@ -902,21 +903,29 @@ impl Win {
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
             .connect_default_height_notify(on!(self, win, |_| win.on_resize()));
-        // Back where it was last time, where the compositor allows it.
+        // Back where it was last time, where the desktop allows it.
         let weak = Rc::downgrade(self);
         let placed = Cell::new(false);
-        self.window.connect_map(move |_| {
+        self.window.connect_map(move |window| {
             let Some(win) = weak.upgrade() else { return };
-            if placed.replace(true) || !compositor::is_hyprland() {
+            if placed.replace(true) || !win.settings.bool("remember_size") {
                 return;
             }
-            if !win.settings.bool("remember_size") {
+            let Some(method) = placement::method(window) else {
                 return;
-            }
-            let center = win.state.borrow().center;
-            if let Some((x, y)) = center {
-                debug(&format!("moving the window back to centre {x},{y}"));
-                compositor::hyprland_move_center(x, y, Rc::new(debug));
+            };
+            let saved = {
+                let state = win.state.borrow();
+                state
+                    .center
+                    .filter(|_| state.placed_by.as_deref() == Some(method.key()))
+            };
+            if let Some(center) = saved {
+                let window = window.clone().upcast::<gtk::Window>();
+                // Once the window manager has placed it, or the move is undone.
+                glib::timeout_add_local_once(Duration::from_millis(50), move || {
+                    placement::restore(&window, method, center, Rc::new(debug));
+                });
             }
         });
         // The surface's size changes even where the default size doesn't
@@ -1990,10 +1999,14 @@ impl Win {
     fn save_size(&self) {
         self.store_size();
         if self.settings.bool("remember_size") {
-            if compositor::is_hyprland() && self.window.is_mapped() {
-                let center = compositor::hyprland_window_center(&(Rc::new(debug) as _));
-                if center.is_some() {
-                    self.state.borrow_mut().center = center;
+            if let Some(method) =
+                placement::method(&self.window).filter(|_| self.window.is_mapped())
+            {
+                let window = self.window.clone().upcast::<gtk::Window>();
+                if let Some(center) = placement::center(&window, method, &(Rc::new(debug) as _)) {
+                    let mut state = self.state.borrow_mut();
+                    state.center = Some(center);
+                    state.placed_by = Some(method.key().to_string());
                 }
             }
             let state = self.state.borrow();

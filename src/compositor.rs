@@ -19,7 +19,7 @@ pub fn is_hyprland() -> bool {
 }
 
 /// Run a command; callback(ok, stdout).
-fn run(argv: &[&str], callback: impl FnOnce(bool, String) + 'static) {
+pub(crate) fn run(argv: &[&str], callback: impl FnOnce(bool, String) + 'static) {
     let args: Vec<&std::ffi::OsStr> = argv.iter().map(std::ffi::OsStr::new).collect();
     let flags = gio::SubprocessFlags::STDOUT_PIPE | gio::SubprocessFlags::STDERR_MERGE;
     let proc = match gio::Subprocess::newv(&args, flags) {
@@ -36,10 +36,10 @@ fn run(argv: &[&str], callback: impl FnOnce(bool, String) + 'static) {
     });
 }
 
-type Debug = Rc<dyn Fn(&str)>;
+pub(crate) type Debug = Rc<dyn Fn(&str)>;
 
 /// Try Hyprland's Lua dispatch (0.55+), then the classic syntax.
-fn dispatch(
+pub(crate) fn dispatch(
     lua_expr: String,
     classic_args: Vec<String>,
     debug: Debug,
@@ -107,7 +107,12 @@ pub fn hyprland_resize(
 }
 
 /// Hide or show Hyprland's own animation for the window.
-fn set_no_anim(target: &str, value: &str, debug: Debug, callback: impl FnOnce(bool) + 'static) {
+pub(crate) fn set_no_anim(
+    target: &str,
+    value: &str,
+    debug: Debug,
+    callback: impl FnOnce(bool) + 'static,
+) {
     dispatch(
         format!(
             r#"hl.dsp.window.set_prop({{ prop = "no_anim", value = "{value}", window = "{target}" }})"#
@@ -153,13 +158,13 @@ pub fn hyprland_animate_resize(
     });
 }
 
-struct Client {
-    target: String,
-    at: (f64, f64),
-    size: (f64, f64),
+pub(crate) struct Client {
+    pub target: String,
+    pub at: (f64, f64),
+    pub size: (f64, f64),
 }
 
-fn find_client(out: &str, debug: &Debug) -> Option<Client> {
+pub(crate) fn find_client(out: &str, debug: &Debug) -> Option<Client> {
     let clients = serde_json::from_str::<Vec<serde_json::Value>>(out).ok()?;
     let pid = u64::from(std::process::id());
     let client = clients.iter().find(|c| {
@@ -281,76 +286,4 @@ impl Stepper {
             callback(true);
         }
     }
-}
-
-/// Where this app's window's centre is now. Blocks briefly: used while the
-/// window closes, when there is no time to wait for an answer.
-pub fn hyprland_window_center(debug: &Debug) -> Option<(i32, i32)> {
-    let out = std::process::Command::new("hyprctl")
-        .args(["clients", "-j"])
-        .output()
-        .ok()
-        .filter(|out| out.status.success())?;
-    let client = find_client(&String::from_utf8_lossy(&out.stdout), debug)?;
-    let ((x, y), (w, h)) = (client.at, client.size);
-    Some(((x + w / 2.0).round() as i32, (y + h / 2.0).round() as i32))
-}
-
-/// Move this app's window so its centre is at (cx, cy), without Hyprland's
-/// animation, if that point is on a monitor.
-pub fn hyprland_move_center(cx: i32, cy: i32, debug: Debug) {
-    run(&["hyprctl", "monitors", "-j"], move |ok, out| {
-        let monitors = ok
-            .then(|| serde_json::from_str::<Vec<serde_json::Value>>(&out).ok())
-            .flatten()
-            .unwrap_or_default();
-        let on_screen = monitors.iter().any(|m| {
-            let n = |key: &str| m.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let scale = if n("scale") > 0.0 { n("scale") } else { 1.0 };
-            // Rotated monitors (odd transforms) swap width and height.
-            let (mut w, mut h) = (n("width") / scale, n("height") / scale);
-            if m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0) % 2 == 1 {
-                std::mem::swap(&mut w, &mut h);
-            }
-            let (x, y) = (n("x"), n("y"));
-            let (cx, cy) = (f64::from(cx), f64::from(cy));
-            cx >= x && cx < x + w && cy >= y && cy < y + h
-        });
-        if !on_screen {
-            debug("saved position is off every monitor; leaving the window where it opened");
-            return;
-        }
-        run(&["hyprctl", "clients", "-j"], move |ok, out| {
-            let client = ok.then(|| find_client(&out, &debug)).flatten();
-            let Some(Client {
-                target,
-                size: (w, h),
-                ..
-            }) = client
-            else {
-                return;
-            };
-            let nx = (f64::from(cx) - w / 2.0).round() as i64;
-            let ny = (f64::from(cy) - h / 2.0).round() as i64;
-            let debug2 = debug.clone();
-            let target2 = target.clone();
-            set_no_anim(&target, "1", debug.clone(), move |_| {
-                dispatch(
-                    format!(
-                        r#"hl.dsp.window.move({{ x = {nx}, y = {ny}, relative = false, window = "{target2}" }})"#
-                    ),
-                    vec![
-                        "movewindowpixel".to_string(),
-                        format!("exact {nx} {ny},{target2}"),
-                    ],
-                    debug2.clone(),
-                    move |_| {
-                        glib::timeout_add_local_once(Duration::from_millis(100), move || {
-                            set_no_anim(&target2, "unset", debug2, |_| {});
-                        });
-                    },
-                );
-            });
-        });
-    });
 }

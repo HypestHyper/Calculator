@@ -359,8 +359,10 @@ pub struct WindowState {
     path: PathBuf,
     standard: (i32, i32),
     scientific: (i32, i32),
-    /// Where the window's centre was, where the compositor tells (Hyprland).
+    /// Where the window's centre was, and the method that measured it
+    /// (see placement.rs).
     pub center: Option<(i32, i32)>,
+    pub placed_by: Option<String>,
 }
 
 impl WindowState {
@@ -374,6 +376,7 @@ impl WindowState {
             standard: Mode::Standard.default_size(),
             scientific: Mode::Scientific.default_size(),
             center: None,
+            placed_by: None,
         };
         let data: serde_json::Value = fs::read_to_string(&state.path)
             .ok()
@@ -398,6 +401,10 @@ impl WindowState {
                     [x, y] => Some((x.as_i64()? as i32, y.as_i64()? as i32)),
                     _ => None,
                 });
+        state.placed_by = data
+            .get("placed_by")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         state
     }
 
@@ -443,8 +450,9 @@ impl WindowState {
             "standard": [self.standard.0, self.standard.1],
             "scientific": [self.scientific.0, self.scientific.1],
         });
-        if let Some((x, y)) = self.center {
+        if let (Some((x, y)), Some(method)) = (self.center, &self.placed_by) {
             data["center"] = serde_json::json!([x, y]);
+            data["placed_by"] = serde_json::json!(method);
         }
         let text = serde_json::to_string_pretty(&data).unwrap();
         if let Err(err) = write_atomic(&self.path, &text) {
@@ -617,8 +625,11 @@ mod tests {
         let mut state = WindowState::load(path.clone());
         assert_eq!(state.center, None);
         state.center = Some((1610, 365));
+        state.placed_by = Some("sway".into());
         state.save();
-        assert_eq!(WindowState::load(path).center, Some((1610, 365)));
+        let state = WindowState::load(path);
+        assert_eq!(state.center, Some((1610, 365)));
+        assert_eq!(state.placed_by.as_deref(), Some("sway"));
     }
 
     #[test]

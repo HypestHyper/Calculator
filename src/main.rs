@@ -5,6 +5,7 @@ mod compositor;
 mod config;
 mod icons;
 mod motion;
+mod placement;
 mod preferences;
 mod scale_box;
 mod theme;
