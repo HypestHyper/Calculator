@@ -11,6 +11,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_ulong, c_void, CString};
 use std::process::Command;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib::translate::ToGlibPtr;
@@ -103,6 +104,33 @@ pub fn restore(window: &gtk::Window, method: Method, center: (i32, i32), debug: 
     }
 }
 
+/// Where the desktop can be told before the window opens (Hyprland, Sway),
+/// tell it to open the window with its centre at `center`, so it appears in
+/// place instead of being moved once it has appeared. `size` is the size the
+/// window will ask for. Blocks briefly; call just before showing the window.
+/// False where that isn't possible; then use `restore` once it is open.
+pub fn prepare(method: Method, center: (i32, i32), size: (i32, i32), debug: &Debug) -> bool {
+    match method {
+        Method::Hyprland => prepare_hyprland(center, debug),
+        Method::Sway => prepare_sway(center, size, debug),
+        Method::Niri | Method::X11 => false,
+    }
+}
+
+/// After a window `prepare`d for opened: tidy up, and move it after all if
+/// the desktop put it somewhere else.
+pub fn after_open(window: &gtk::Window, method: Method, center: (i32, i32), debug: Debug) {
+    if method == Method::Hyprland {
+        release_hyprland(debug.clone());
+    }
+    let window = window.clone();
+    check(method, center, debug.clone(), move |placed| {
+        if !placed {
+            restore(&window, method, center, debug);
+        }
+    });
+}
+
 fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(program).args(args).output().ok()?;
     out.status
@@ -164,7 +192,7 @@ fn hyprland_rule_global() -> String {
 /// with Hyprland's own open animation, instead of being moved once it has
 /// appeared. Blocks briefly; call just before showing the window. False if
 /// Hyprland doesn't take it (a config without Lua, before 0.55).
-pub fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
+fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
     let Some(monitors) = command_output("hyprctl", &["monitors", "-j"]) else {
         return false;
     };
@@ -187,16 +215,10 @@ pub fn prepare_hyprland(center: (i32, i32), debug: &Debug) -> bool {
 }
 
 /// Whether the window's centre is within a few pixels of `center`.
-pub fn hyprland_check(center: (i32, i32), debug: Debug, done: impl FnOnce(bool) + 'static) {
-    compositor::run(&["hyprctl", "clients", "-j"], move |ok, out| {
-        let client = ok.then(|| compositor::find_client(&out, &debug)).flatten();
-        let Some(Client {
-            at: (x, y),
-            size: (w, h),
-            ..
-        }) = client
-        else {
-            return done(true); // can't tell; leave it
+fn check(method: Method, center: (i32, i32), debug: Debug, done: impl FnOnce(bool) + 'static) {
+    let found = move |rect: Option<((f64, f64), (f64, f64))>| {
+        let Some(((x, y), (w, h))) = rect else {
+            return true; // can't tell; leave it
         };
         let (cx, cy) = (x + w / 2.0, y + h / 2.0);
         let close =
@@ -207,13 +229,24 @@ pub fn hyprland_check(center: (i32, i32), debug: Debug, done: impl FnOnce(bool) 
                 center.0, center.1
             ));
         }
-        done(close);
-    });
+        close
+    };
+    match method {
+        Method::Hyprland => compositor::run(&["hyprctl", "clients", "-j"], move |ok, out| {
+            let debug: Debug = Rc::new(|_: &str| {});
+            let client = ok.then(|| compositor::find_client(&out, &debug)).flatten();
+            done(found(client.map(|c| (c.at, c.size))));
+        }),
+        Method::Sway => compositor::run(&["swaymsg", "-t", "get_tree", "-r"], move |ok, out| {
+            done(found(ok.then(|| sway_rect(&out)).flatten()));
+        }),
+        Method::Niri | Method::X11 => done(true),
+    }
 }
 
 /// Switch this launch's position rule off once the window has opened, so it
 /// doesn't place other windows (Preferences) or a later launch.
-pub fn release_hyprland(debug: Debug) {
+fn release_hyprland(debug: Debug) {
     let lua = format!(
         "if {g} then {g}:set_enabled(false) end {g} = nil",
         g = hyprland_rule_global()
@@ -294,20 +327,54 @@ fn sway_rect(tree: &str) -> Option<((f64, f64), (f64, f64))> {
     ))
 }
 
+/// The output rectangles, in Sway's layout coordinates.
+fn sway_outputs(outputs: &str) -> Vec<(f64, f64, f64, f64)> {
+    json_list(outputs)
+        .iter()
+        .filter_map(|o| o.get("rect"))
+        .map(|r| {
+            (
+                number(r, "x"),
+                number(r, "y"),
+                number(r, "width"),
+                number(r, "height"),
+            )
+        })
+        .collect()
+}
+
+/// A run-time `for_window` rule for this process's calculator window: Sway
+/// runs it as the window opens, before it is drawn. Sway can't remove such a
+/// rule, so it names this process, which no later launch will be.
+fn prepare_sway(center: (i32, i32), size: (i32, i32), debug: &Debug) -> bool {
+    let Some(outputs) = command_output("swaymsg", &["-t", "get_outputs", "-r"]) else {
+        return false;
+    };
+    if !sway_outputs(&outputs)
+        .into_iter()
+        .any(|r| inside(center, r))
+    {
+        debug("saved position is off every output; leaving the window where it opens");
+        return true;
+    }
+    let x = center.0 - size.0 / 2;
+    let y = center.1 - size.1 / 2;
+    let class = APP_ID.replace('.', "\\.");
+    let command = format!(
+        r#"for_window [app_id="^{class}$" pid={} title="^Calculator$"] move absolute position {x} {y}"#,
+        own_pid()
+    );
+    let ok = Command::new("swaymsg")
+        .arg(&command)
+        .output()
+        .is_ok_and(|out| out.status.success());
+    debug(&format!("swaymsg for_window (position) -> {ok}"));
+    ok
+}
+
 fn restore_sway(center: (i32, i32), debug: Debug) {
     compositor::run(&["swaymsg", "-t", "get_outputs", "-r"], move |ok, out| {
-        let outputs = if ok { json_list(&out) } else { Vec::new() };
-        let on_screen = outputs.iter().filter_map(|o| o.get("rect")).any(|r| {
-            inside(
-                center,
-                (
-                    number(r, "x"),
-                    number(r, "y"),
-                    number(r, "width"),
-                    number(r, "height"),
-                ),
-            )
-        });
+        let on_screen = ok && sway_outputs(&out).into_iter().any(|r| inside(center, r));
         if !on_screen {
             debug("saved position is off every output; leaving the window where it opened");
             return;

@@ -87,6 +87,7 @@ Wayland applications cannot request to float, so tiling compositors need a windo
 ```sh
 io.github.HypestHyper.Calculator --print-window-rules hyprland
 io.github.HypestHyper.Calculator --print-window-rules niri
+io.github.HypestHyper.Calculator --print-window-rules sway
 ```
 
 Hyprland (Lua config, `~/.config/hypr/hyprland.lua`):
@@ -106,6 +107,12 @@ window-rule {
     match app-id=r#"^io\.github\.HypestHyper\.Calculator$"#
     open-floating true
 }
+```
+
+Sway (`~/.config/sway/config`):
+
+```
+for_window [app_id="^io\.github\.HypestHyper\.Calculator$"] floating enable
 ```
 
 For other compositors, match the app ID `io.github.HypestHyper.Calculator`.

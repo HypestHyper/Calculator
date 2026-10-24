@@ -16,7 +16,7 @@ pub struct Rule {
     pub note: &'static str,
 }
 
-pub const ORDER: [&str; 2] = ["hyprland", "niri"];
+pub const ORDER: [&str; 3] = ["hyprland", "niri", "sway"];
 
 pub fn rule(key: &str) -> Option<Rule> {
     let escaped = APP_ID.replace('.', r"\.");
@@ -27,6 +27,13 @@ pub fn rule(key: &str) -> Option<Rule> {
             file: "~/.config/niri/config.kdl",
             snippet: format!("window-rule {{\n    match app-id=r#\"^{escaped}$\"#\n    open-floating true\n}}"),
             note: "niri reloads its config automatically.",
+        }),
+        "sway" => Some(Rule {
+            key: "sway",
+            name: "Sway",
+            file: "~/.config/sway/config",
+            snippet: format!("for_window [app_id=\"^{escaped}$\"] floating enable"),
+            note: "Reload with “swaymsg reload”.",
         }),
         "hyprland" => Some(Rule {
             key: "hyprland",
@@ -50,6 +57,9 @@ pub fn detect() -> Option<&'static str> {
     }
     if set("NIRI_SOCKET") {
         return Some("niri");
+    }
+    if set("SWAYSOCK") {
+        return Some("sway");
     }
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
@@ -79,6 +89,10 @@ mod tests {
             rule("niri").unwrap().snippet,
             "window-rule {\n    match app-id=r#\"^io\\.github\\.HypestHyper\\.Calculator$\"#\n    open-floating true\n}"
         );
-        assert!(rule("sway").is_none());
+        assert_eq!(
+            rule("sway").unwrap().snippet,
+            "for_window [app_id=\"^io\\.github\\.HypestHyper\\.Calculator$\"] floating enable"
+        );
+        assert!(rule("kwin").is_none());
     }
 }
