@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- No focus outline around the display, and along the window's edges, after typing or after opening the app again while it is already running (for example with Enter in a launcher).
+
 ### Changed
 
+- Faster start with a long history: its rows are built after the window is shown, instead of before. With a full history (100 entries) this saved 30 to 70 ms.
 - The window opens smaller by default: 220×330 in standard mode, 396×330 in scientific mode.
 
 ### Added

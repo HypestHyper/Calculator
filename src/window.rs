@@ -307,6 +307,8 @@ pub struct Win {
     shrunk_for_switch: Cell<bool>,
     remapping: Cell<bool>,
     sheet_open: Cell<bool>,
+    /// The history rows need rebuilding before the sheet is shown.
+    history_stale: Cell<bool>,
     standard_grid: gtk::Grid,
     sci_grid: gtk::Grid,
     /// The standard keys are pinned while the scientific panel closes.
@@ -557,6 +559,9 @@ impl Win {
             .vscrollbar_policy(gtk::PolicyType::Never)
             .propagate_natural_height(true)
             .hexpand(true)
+            // Keys go to the window, so the display never needs focus; with
+            // it, typing would draw a focus outline around it.
+            .focusable(false)
             .child(&expr_label)
             .build();
         let expr_anim = Animated::new(&expr_scroll, None);
@@ -733,6 +738,7 @@ impl Win {
             shrunk_for_switch: Cell::new(false),
             remapping: Cell::new(false),
             sheet_open: Cell::new(false),
+            history_stale: Cell::new(false),
             standard_grid,
             sci_grid,
             pinned: Cell::new(false),
@@ -1452,7 +1458,29 @@ impl Win {
     }
 
     // ----------------------------------------------------------- history
+    /// Rebuild the history sheet's rows: right away while the sheet is open,
+    /// else once the app is idle (or when the sheet opens, if sooner). A full
+    /// history takes longer to build than the rest of the window, so start-up
+    /// doesn't wait for it.
     fn rebuild_history(self: &Rc<Self>) {
+        if self.sheet_open.get() {
+            self.fill_history();
+            return;
+        }
+        if self.history_stale.replace(true) {
+            return; // already scheduled
+        }
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_full(glib::Priority::LOW, move || {
+            if let Some(win) = weak.upgrade().filter(|win| win.history_stale.get()) {
+                win.fill_history();
+            }
+            glib::ControlFlow::Break
+        });
+    }
+
+    fn fill_history(self: &Rc<Self>) {
+        self.history_stale.set(false);
         while let Some(child) = self.history_list.first_child() {
             self.history_list.remove(&child);
         }
@@ -1562,6 +1590,9 @@ impl Win {
         let sheet_h = f64::from(height) * 0.74;
         self.history_sheet.set_size_request(-1, sheet_h as i32);
         self.sheet_open.set(opening);
+        if opening && self.history_stale.get() {
+            self.fill_history();
+        }
         if opening {
             self.sheet_anim.set_visible(true);
             self.scrim.set_visible(true);
