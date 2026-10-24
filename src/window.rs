@@ -427,6 +427,13 @@ pub struct Win {
     scale_pending: Cell<bool>,
     /// How the contents' minimum size follows the scale, per mode.
     size_models: Cell<[SizeModel; 2]>,
+    /// A scale that turned out too big, and the room it had then: not tried
+    /// again until there is more room.
+    too_big: Cell<Option<(f64, [i32; 2])>>,
+    /// The last size fit_window asked for, and until when the scale holds
+    /// still while the window takes it (it may pass through other sizes).
+    last_fit: Cell<Option<(i32, i32)>>,
+    fitting_until: Cell<i64>,
 }
 
 /// Widgets made while building, before the window exists as an `Rc`.
@@ -878,6 +885,9 @@ impl Win {
             scale: Cell::new(1.0),
             scale_pending: Cell::new(false),
             size_models: Cell::default(),
+            too_big: Cell::new(None),
+            last_fit: Cell::new(None),
+            fitting_until: Cell::new(0),
         });
         gtk::style_context_add_provider_for_display(
             &WidgetExt::display(&win.window),
@@ -1040,6 +1050,22 @@ impl Win {
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
             .connect_default_height_notify(on!(self, win, |_| win.on_resize()));
+        // Hyprland: resizing keeps the window's proportions (see fit_window).
+        let locked = Cell::new(false);
+        let weak = Rc::downgrade(self);
+        self.window.connect_map(move |_| {
+            if locked.replace(true) || !compositor::is_hyprland() {
+                return;
+            }
+            compositor::hyprland_keep_aspect(Rc::new(debug));
+            // Once the scale has settled, so the proportions start right.
+            let weak = weak.clone();
+            glib::timeout_add_local_once(Duration::from_millis(700), move || {
+                if let Some(win) = weak.upgrade() {
+                    win.fit_window();
+                }
+            });
+        });
         // Back where it was last time, where the desktop allows it.
         let weak = Rc::downgrade(self);
         let placed = Cell::new(false);
@@ -1277,11 +1303,17 @@ impl Win {
         self.store_size();
         self.mode.set(new_mode);
         self.mode_changed_at.set(glib::monotonic_time());
-        // Rescale once the switch is over.
+        // Rescale once the switch is over, then fit the window to it.
         let weak = Rc::downgrade(self);
         glib::timeout_add_local_once(Duration::from_millis(1600), move || {
             if let Some(win) = weak.upgrade() {
                 win.queue_scale();
+                let weak = Rc::downgrade(&win);
+                glib::timeout_add_local_once(Duration::from_millis(300), move || {
+                    if let Some(win) = weak.upgrade() {
+                        win.fit_window();
+                    }
+                });
             }
         });
         self.shrunk_for_switch.set(false);
@@ -1952,9 +1984,13 @@ impl Win {
     /// space the scale can't use goes to the display.
     fn update_scale(self: &Rc<Self>) {
         self.scale_pending.set(false);
-        let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
+        let now = glib::monotonic_time();
+        let switching = now - self.mode_changed_at.get() < 1_500_000;
         if switching || self.pinned.get() || !self.window.is_mapped() {
             return; // sizes during a mode switch belong to the transition
+        }
+        if now < self.fitting_until.get() {
+            return; // fit_window is resizing the window
         }
         let available = [
             self.body_box.width(),
@@ -1970,14 +2006,27 @@ impl Win {
         let avail = available.map(f64::from);
         let target = if short {
             // Doesn't fit: as far down as the sizes say, at least one step.
+            self.too_big.set(Some((scale, available)));
             let target = choose_scale(avail, model.fixed, model.per_scale);
             target
                 .min(((scale - STEP) * 100.0).round() / 100.0)
                 .max(MIN_SCALE)
         } else {
-            // Grow only with a little room to spare, so it never flips back and forth.
+            // Grow only with a little room to spare, and never back to a
+            // scale that didn't fit in this much room, so it doesn't flip
+            // back and forth.
             let room = [avail[0] - 4.0, avail[1] - 4.0];
-            scale.max(choose_scale(room, model.fixed, model.per_scale))
+            let mut target = scale.max(choose_scale(room, model.fixed, model.per_scale));
+            if let Some((too_big, then)) = self.too_big.get() {
+                if available[0] <= then[0] && available[1] <= then[1] {
+                    target = target
+                        .min(((too_big - STEP) * 100.0).round() / 100.0)
+                        .max(scale);
+                } else {
+                    self.too_big.set(None);
+                }
+            }
+            target
         };
         if target != scale {
             self.apply_scale(target);
@@ -2189,6 +2238,52 @@ impl Win {
         }
     }
 
+    /// Where the compositor can resize the window and keeps its proportions
+    /// while the user resizes it (Hyprland): once its size has settled, make
+    /// it exactly as big as the calculator at its scale. The locked
+    /// proportions are then the calculator's own, and no space is left over
+    /// at the sides or below.
+    fn fit_window(self: &Rc<Self>) {
+        let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
+        if !compositor::is_hyprland()
+            || switching
+            || self.pinned.get()
+            || !self.window.is_mapped()
+            || self.fills_screen()
+        {
+            return;
+        }
+        let need = self.content_min();
+        let available = [
+            self.body_box.width(),
+            self.header_box.height() + self.body_box.height(),
+        ];
+        // Two pixels of slack, so rounding never makes it too small.
+        let spare = [available[0] - need[0] - 2, available[1] - need[1] - 2];
+        // Too small: the scale goes down first. Within a few pixels: fine.
+        if spare.iter().any(|&s| s < 0) || spare.iter().all(|&s| s <= 3) {
+            return;
+        }
+        let width = self.window.width() - spare[0];
+        let height = self.window.height() - spare[1];
+        // Asked for before and not given (the window's minimum size, say).
+        if self.last_fit.replace(Some((width, height))) == Some((width, height)) {
+            return;
+        }
+        debug(&format!(
+            "fitting the window to the calculator: {width}x{height}"
+        ));
+        self.fitting_until.set(glib::monotonic_time() + 400_000);
+        self.window.set_default_size(width, height);
+        compositor::hyprland_resize(width, height, Rc::new(debug), |_| {});
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_local_once(Duration::from_millis(450), move || {
+            if let Some(win) = weak.upgrade() {
+                win.queue_scale();
+            }
+        });
+    }
+
     fn on_resize(self: &Rc<Self>) {
         if let Some(id) = self.resize_save.borrow_mut().take() {
             id.remove();
@@ -2197,6 +2292,7 @@ impl Win {
         let id = glib::timeout_add_local_once(Duration::from_millis(400), move || {
             let Some(win) = weak.upgrade() else { return };
             win.resize_save.borrow_mut().take();
+            win.fit_window();
             win.store_size();
             if win.settings.bool("remember_size") {
                 win.state.borrow().save();

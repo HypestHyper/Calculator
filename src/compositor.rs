@@ -113,14 +113,50 @@ pub(crate) fn set_no_anim(
     debug: Debug,
     callback: impl FnOnce(bool) + 'static,
 ) {
+    set_prop(target, "no_anim", "noanim", value, debug, callback);
+}
+
+/// Set a window property: `prop` in Lua, `classic` in the older syntax.
+fn set_prop(
+    target: &str,
+    prop: &str,
+    classic: &str,
+    value: &str,
+    debug: Debug,
+    callback: impl FnOnce(bool) + 'static,
+) {
     dispatch(
         format!(
-            r#"hl.dsp.window.set_prop({{ prop = "no_anim", value = "{value}", window = "{target}" }})"#
+            r#"hl.dsp.window.set_prop({{ prop = "{prop}", value = "{value}", window = "{target}" }})"#
         ),
-        vec!["setprop".to_string(), format!("{target} noanim {value}")],
+        vec!["setprop".to_string(), format!("{target} {classic} {value}")],
         debug,
         callback,
     );
+}
+
+/// Make Hyprland keep this app's window's proportions while it is resized
+/// with the mouse: those it has when the resize starts.
+pub fn hyprland_keep_aspect(debug: Debug) {
+    run(&["hyprctl", "clients", "-j"], move |ok, out| {
+        let Some(client) = ok.then(|| find_client(&out, &debug)).flatten() else {
+            return;
+        };
+        let debug2 = debug.clone();
+        set_prop(
+            &client.target,
+            "keep_aspect_ratio",
+            "keepaspectratio",
+            "1",
+            debug,
+            move |ok| {
+                debug2(&format!(
+                    "keep aspect ratio: {}",
+                    if ok { "on" } else { "failed" }
+                ));
+            },
+        );
+    });
 }
 
 /// Shrink or grow this app's window to width x height in small steps over

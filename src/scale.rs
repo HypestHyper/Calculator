@@ -14,8 +14,8 @@ use regex::Regex;
 pub const MIN_SCALE: f64 = 0.5;
 /// The largest factor, for big windows.
 pub const MAX_SCALE: f64 = 2.0;
-/// Factors go in steps, so resizing restyles only now and then.
-pub const STEP: f64 = 0.05;
+/// Factors go in steps of 1%: fine enough to follow the window smoothly.
+pub const STEP: f64 = 0.01;
 /// Text never gets smaller than this, in px.
 pub const MIN_FONT: f64 = 12.0;
 

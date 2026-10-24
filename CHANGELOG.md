@@ -9,6 +9,7 @@
 
 ### Changed
 
+- On Hyprland, the window keeps its proportions while you resize it, and fits the calculator exactly once you let go, so there is never empty space at the sides or below. The calculator scales smoothly with it, in 1% steps.
 - Resizing keeps the calculator's proportions: the keys keep their rounded shape at every window size, button size and in both modes, and the whole calculator scales with the window, from half to twice its normal size. Extra space goes to the display instead of stretching the keys, and the keypad stays centred.
 - Text stays readable in a small window: it shrinks less than the rest (to 70% at the smallest size, never below 12 px) and gets slightly bolder as it shrinks.
 - Opening scientific mode widens the window by exactly the scientific keys, and closing it narrows it by the same, so both modes have the same margins. The standard keys stay in place while the panel slides.
