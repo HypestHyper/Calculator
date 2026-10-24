@@ -329,6 +329,10 @@ fn window_control(window: &gtk::ApplicationWindow, name: &str) -> Option<gtk::Bu
     Some(button)
 }
 
+/// How much wider than their own shape the keys may be drawn, to fill a
+/// wider window.
+const MAX_KEY_STRETCH: f64 = 1.25;
+
 /// A size in px at the given scale.
 fn scaled(px: i32, scale: f64) -> i32 {
     (f64::from(px) * scale).round() as i32
@@ -430,10 +434,8 @@ pub struct Win {
     /// A scale that turned out too big, and the room it had then: not tried
     /// again until there is more room.
     too_big: Cell<Option<(f64, [i32; 2])>>,
-    /// The last size fit_window asked for, and until when the scale holds
-    /// still while the window takes it (it may pass through other sizes).
-    last_fit: Cell<Option<(i32, i32)>>,
-    fitting_until: Cell<i64>,
+    /// How much wider than their own width the keys are drawn (stretch_keys).
+    stretch: Cell<i32>,
 }
 
 /// Widgets made while building, before the window exists as an `Rc`.
@@ -886,8 +888,7 @@ impl Win {
             scale_pending: Cell::new(false),
             size_models: Cell::default(),
             too_big: Cell::new(None),
-            last_fit: Cell::new(None),
-            fitting_until: Cell::new(0),
+            stretch: Cell::new(0),
         });
         gtk::style_context_add_provider_for_display(
             &WidgetExt::display(&win.window),
@@ -1050,22 +1051,6 @@ impl Win {
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
             .connect_default_height_notify(on!(self, win, |_| win.on_resize()));
-        // Hyprland: resizing keeps the window's proportions (see fit_window).
-        let locked = Cell::new(false);
-        let weak = Rc::downgrade(self);
-        self.window.connect_map(move |_| {
-            if locked.replace(true) || !compositor::is_hyprland() {
-                return;
-            }
-            compositor::hyprland_keep_aspect(Rc::new(debug));
-            // Once the scale has settled, so the proportions start right.
-            let weak = weak.clone();
-            glib::timeout_add_local_once(Duration::from_millis(700), move || {
-                if let Some(win) = weak.upgrade() {
-                    win.fit_window();
-                }
-            });
-        });
         // Back where it was last time, where the desktop allows it.
         let weak = Rc::downgrade(self);
         let placed = Cell::new(false);
@@ -1303,17 +1288,11 @@ impl Win {
         self.store_size();
         self.mode.set(new_mode);
         self.mode_changed_at.set(glib::monotonic_time());
-        // Rescale once the switch is over, then fit the window to it.
+        // Rescale once the switch is over.
         let weak = Rc::downgrade(self);
         glib::timeout_add_local_once(Duration::from_millis(1600), move || {
             if let Some(win) = weak.upgrade() {
                 win.queue_scale();
-                let weak = Rc::downgrade(&win);
-                glib::timeout_add_local_once(Duration::from_millis(300), move || {
-                    if let Some(win) = weak.upgrade() {
-                        win.fit_window();
-                    }
-                });
             }
         });
         self.shrunk_for_switch.set(false);
@@ -1462,8 +1441,11 @@ impl Win {
         if self.keypad.halign() != gtk::Align::Center {
             return;
         }
+        // The keys at their own width while the panel moves.
+        self.keypad.set_size_request(-1, -1);
         let slot = self.keypad.parent().map_or(0, |slot| slot.width());
-        let gap = ((slot - self.keypad.width()) / 2).max(0);
+        let own = self.keypad.width() - self.stretch.replace(0);
+        let gap = ((slot - own) / 2).max(0);
         self.keypad.set_margin_end(gap);
         self.keypad.set_halign(gtk::Align::End);
     }
@@ -1938,10 +1920,31 @@ impl Win {
         let (header, body) = (self.header_box.child(), self.body_box.child());
         let h = gtk::Orientation::Horizontal;
         let v = gtk::Orientation::Vertical;
+        // Not counting the keys' stretch: that is extra width, not needed.
+        let body_width = body.measure(h, -1).0 - self.stretch.get();
         [
-            header.measure(h, -1).0.max(body.measure(h, -1).0),
+            header.measure(h, -1).0.max(body_width),
             header.measure(v, -1).0 + body.measure(v, -1).0,
         ]
+    }
+
+    /// Let the keys widen into spare width, up to a quarter wider than their
+    /// own shape; past that the keypad stays centred. Not while a mode switch
+    /// holds the keypad in place.
+    fn stretch_keys(&self) {
+        if self.keypad.halign() != gtk::Align::Center {
+            return;
+        }
+        let h = gtk::Orientation::Horizontal;
+        let own = self.sci_revealer.measure(h, -1).0 + self.standard_grid.measure(h, -1).0;
+        let room = self.keypad.parent().map_or(0, |slot| slot.width());
+        let width = room.min((f64::from(own) * MAX_KEY_STRETCH) as i32);
+        let stretch = if width > own + 1 { width - own } else { 0 };
+        if stretch != self.stretch.get() {
+            self.stretch.set(stretch);
+            self.keypad
+                .set_size_request(if stretch > 0 { width } else { -1 }, -1);
+        }
     }
 
     fn size_model(&self) -> SizeModel {
@@ -1984,13 +1987,9 @@ impl Win {
     /// space the scale can't use goes to the display.
     fn update_scale(self: &Rc<Self>) {
         self.scale_pending.set(false);
-        let now = glib::monotonic_time();
-        let switching = now - self.mode_changed_at.get() < 1_500_000;
+        let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
         if switching || self.pinned.get() || !self.window.is_mapped() {
             return; // sizes during a mode switch belong to the transition
-        }
-        if now < self.fitting_until.get() {
-            return; // fit_window is resizing the window
         }
         let available = [
             self.body_box.width(),
@@ -2031,6 +2030,7 @@ impl Win {
         if target != scale {
             self.apply_scale(target);
         }
+        self.stretch_keys();
     }
 
     fn apply_scale(&self, scale: f64) {
@@ -2238,52 +2238,6 @@ impl Win {
         }
     }
 
-    /// Where the compositor can resize the window and keeps its proportions
-    /// while the user resizes it (Hyprland): once its size has settled, make
-    /// it exactly as big as the calculator at its scale. The locked
-    /// proportions are then the calculator's own, and no space is left over
-    /// at the sides or below.
-    fn fit_window(self: &Rc<Self>) {
-        let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
-        if !compositor::is_hyprland()
-            || switching
-            || self.pinned.get()
-            || !self.window.is_mapped()
-            || self.fills_screen()
-        {
-            return;
-        }
-        let need = self.content_min();
-        let available = [
-            self.body_box.width(),
-            self.header_box.height() + self.body_box.height(),
-        ];
-        // Two pixels of slack, so rounding never makes it too small.
-        let spare = [available[0] - need[0] - 2, available[1] - need[1] - 2];
-        // Too small: the scale goes down first. Within a few pixels: fine.
-        if spare.iter().any(|&s| s < 0) || spare.iter().all(|&s| s <= 3) {
-            return;
-        }
-        let width = self.window.width() - spare[0];
-        let height = self.window.height() - spare[1];
-        // Asked for before and not given (the window's minimum size, say).
-        if self.last_fit.replace(Some((width, height))) == Some((width, height)) {
-            return;
-        }
-        debug(&format!(
-            "fitting the window to the calculator: {width}x{height}"
-        ));
-        self.fitting_until.set(glib::monotonic_time() + 400_000);
-        self.window.set_default_size(width, height);
-        compositor::hyprland_resize(width, height, Rc::new(debug), |_| {});
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(Duration::from_millis(450), move || {
-            if let Some(win) = weak.upgrade() {
-                win.queue_scale();
-            }
-        });
-    }
-
     fn on_resize(self: &Rc<Self>) {
         if let Some(id) = self.resize_save.borrow_mut().take() {
             id.remove();
@@ -2292,7 +2246,6 @@ impl Win {
         let id = glib::timeout_add_local_once(Duration::from_millis(400), move || {
             let Some(win) = weak.upgrade() else { return };
             win.resize_save.borrow_mut().take();
-            win.fit_window();
             win.store_size();
             if win.settings.bool("remember_size") {
                 win.state.borrow().save();

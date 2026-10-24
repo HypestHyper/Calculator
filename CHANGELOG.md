@@ -9,8 +9,7 @@
 
 ### Changed
 
-- On Hyprland, the window keeps its proportions while you resize it, and fits the calculator exactly once you let go, so there is never empty space at the sides or below. The calculator scales smoothly with it, in 1% steps.
-- Resizing keeps the calculator's proportions: the keys keep their rounded shape at every window size, button size and in both modes, and the whole calculator scales with the window, from half to twice its normal size. Extra space goes to the display instead of stretching the keys, and the keypad stays centred.
+- Resizing keeps the calculator's proportions: the keys keep their rounded shape at every window size, button size and in both modes, and the whole calculator scales with the window, from half to twice its normal size. Extra height goes to the display; in extra width the keys widen up to a quarter, and past that the keypad stays centred. The scale follows the window in 1% steps.
 - Text stays readable in a small window: it shrinks less than the rest (to 70% at the smallest size, never below 12 px) and gets slightly bolder as it shrinks.
 - Opening scientific mode widens the window by exactly the scientific keys, and closing it narrows it by the same, so both modes have the same margins. The standard keys stay in place while the panel slides.
 - The suggested Hyprland rule (Preferences → Window, `--print-window-rules hyprland`) no longer has `center = true`: Hyprland opens new floating windows in the middle anyway, and the line only stopped the calculator from opening where it was last. If you copied the rule before, you can remove that line; the calculator now overrides it either way.
