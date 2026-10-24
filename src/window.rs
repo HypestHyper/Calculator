@@ -220,12 +220,28 @@ const KEY_SPACING: i32 = 10;
 /// How long the window takes to shrink on Hyprland, in seconds.
 const SHRINK_SECONDS: f64 = 0.3;
 
+/// Signal numbers, the same on every Linux architecture.
+mod libc_signal {
+    pub const SIGHUP: i32 = 1;
+    pub const SIGINT: i32 = 2;
+    pub const SIGTERM: i32 = 15;
+}
+
 /// A size in px at the given scale.
 fn scaled(px: i32, scale: f64) -> i32 {
     (f64::from(px) * scale).round() as i32
 }
 
 const TEXT_SIZES: [(&str, f64); 3] = [("small", 46.0), ("medium", 58.0), ("large", 70.0)];
+
+/// Content minimum = fixed + scale * per_scale, per axis, and the minimum
+/// at full scale once known.
+#[derive(Clone, Copy, Default)]
+struct SizeModel {
+    fixed: [f64; 2],
+    per_scale: [f64; 2],
+    full: [Option<f64>; 2],
+}
 
 /// A keypad key whose action can change (the INV variants).
 struct Key {
@@ -301,11 +317,8 @@ pub struct Win {
     scale_provider: gtk::CssProvider,
     scale: Cell<f64>,
     scale_pending: Cell<bool>,
-    /// Content minimum = fixed + scale * per_scale, per axis.
-    fixed: Cell<[f64; 2]>,
-    per_scale: Cell<[f64; 2]>,
-    /// Content minimum at full scale, once known.
-    full: Cell<[Option<f64>; 2]>,
+    /// How the contents' minimum size follows the scale, per mode.
+    size_models: Cell<[SizeModel; 2]>,
     grow_tried: Cell<Option<[i32; 2]>>,
     last_size: Cell<(i32, i32)>,
     shrunk_at: Cell<i64>,
@@ -727,9 +740,7 @@ impl Win {
             scale_provider: gtk::CssProvider::new(),
             scale: Cell::new(1.0),
             scale_pending: Cell::new(false),
-            fixed: Cell::new([0.0; 2]),
-            per_scale: Cell::new([0.0; 2]),
-            full: Cell::new([None; 2]),
+            size_models: Cell::default(),
             grow_tried: Cell::new(None),
             last_size: Cell::new((0, 0)),
             shrunk_at: Cell::new(0),
@@ -739,6 +750,11 @@ impl Win {
             &win.scale_provider,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
         );
+        debug(&format!(
+            "starting in {} mode at {:?}",
+            mode.key(),
+            win.size_for(mode)
+        ));
         win.apply_size_for(mode, true);
         win.connect_signals();
         win.rebuild_history();
@@ -860,13 +876,28 @@ impl Win {
         let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |_| {
             if let Some(win) = weak.upgrade() {
-                win.store_size();
-                if win.settings.bool("remember_size") {
-                    win.state.borrow().save();
-                }
+                win.save_size();
             }
             glib::Propagation::Proceed
         });
+        // Logging out or shutting down stops the app without closing the
+        // window: save the size first.
+        for signal in [
+            libc_signal::SIGTERM,
+            libc_signal::SIGHUP,
+            libc_signal::SIGINT,
+        ] {
+            let weak = Rc::downgrade(self);
+            glib::unix_signal_add_local(signal, move || {
+                if let Some(win) = weak.upgrade() {
+                    win.save_size();
+                    if let Some(app) = win.window.application() {
+                        app.quit();
+                    }
+                }
+                glib::ControlFlow::Break
+            });
+        }
         self.window
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
@@ -1089,6 +1120,10 @@ impl Win {
             self.apply_size_for(new_mode, false); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
             self.sci_revealer.set_reveal_child(true);
+            // A hidden panel keeps the styles it had when hidden; restyle it
+            // for the current scale.
+            self.sci_grid.add_css_class("restyle");
+            self.sci_grid.remove_css_class("restyle");
             self.stagger_in();
         } else {
             self.pin_standard(); // the keys keep their size while the panel slides out
@@ -1650,7 +1685,7 @@ impl Win {
             "decimals" | "live_preview" => self.refresh(None, false),
             _ => {
                 if key == "text_size" || key == "button_size" {
-                    self.full.set([None; 2]); // the sizes at full scale changed
+                    self.size_models.take(); // the sizes at full scale changed
                 }
                 self.apply_settings();
                 self.refresh(None, false);
@@ -1683,13 +1718,23 @@ impl Win {
         ]
     }
 
+    fn size_model(&self) -> SizeModel {
+        self.size_models.get()[self.mode.get() as usize]
+    }
+
+    fn set_size_model(&self, model: SizeModel) {
+        let mut models = self.size_models.get();
+        models[self.mode.get() as usize] = model;
+        self.size_models.set(models);
+    }
+
     /// Fit content minimum = fixed + scale * per_scale on each axis, from the
     /// size at full scale and the size now.
     fn learn_sizes(&self) -> [i32; 2] {
         let need = self.content_min();
         let scale = self.scale.get();
-        let (mut fixed, mut per_scale, mut full) =
-            (self.fixed.get(), self.per_scale.get(), self.full.get());
+        let model = self.size_model();
+        let (mut fixed, mut per_scale, mut full) = (model.fixed, model.per_scale, model.full);
         for i in 0..2 {
             let n = f64::from(need[i]);
             if scale >= 1.0 {
@@ -1700,9 +1745,11 @@ impl Win {
             per_scale[i] = (n - fixed[i]) / scale;
             full[i] = Some(fixed[i] + per_scale[i]);
         }
-        self.fixed.set(fixed);
-        self.per_scale.set(per_scale);
-        self.full.set(full);
+        self.set_size_model(SizeModel {
+            fixed,
+            per_scale,
+            full,
+        });
         need
     }
 
@@ -1722,6 +1769,7 @@ impl Win {
             return;
         }
         let need = self.learn_sizes();
+        let model = self.size_model();
         let scale = self.scale.get();
         let short = need.iter().zip(available).any(|(&n, a)| n > a);
         if short && scale >= 1.0 && self.try_grow(need, available) {
@@ -1730,13 +1778,12 @@ impl Win {
         let avail = available.map(f64::from);
         let target = if short {
             // Doesn't fit: as far down as the sizes say, at least one step.
-            let target = choose_scale(avail, self.fixed.get(), self.per_scale.get());
+            let target = choose_scale(avail, model.fixed, model.per_scale);
             target
                 .min(((scale - STEP) * 100.0).round() / 100.0)
                 .max(MIN_SCALE)
-        } else if self
+        } else if model
             .full
-            .get()
             .iter()
             .zip(avail)
             .all(|(f, a)| f.is_some_and(|f| f <= a))
@@ -1745,18 +1792,23 @@ impl Win {
         } else {
             // Grow only with a little room to spare, so it never flips back and forth.
             let room = [avail[0] - 4.0, avail[1] - 4.0];
-            scale.max(choose_scale(room, self.fixed.get(), self.per_scale.get()))
+            scale.max(choose_scale(room, model.fixed, model.per_scale))
         };
         if target != scale {
             self.apply_scale(target);
         }
     }
 
-    /// At full scale, make room by growing the window, as GTK does for a
-    /// window smaller than its contents: unless the user has just made it
-    /// smaller, or growing was already tried for this size and didn't work
-    /// (a tiled or maximized window). True if it grows.
+    /// At full scale, make room by growing the window when it is a few
+    /// pixels short of its contents, as GTK does for a window smaller than
+    /// them: unless the user has just made it smaller, or growing was already
+    /// tried for this size and didn't work (a tiled or maximized window).
+    /// Further short, the window is small on purpose and the contents scale
+    /// down instead. True if it grows.
     fn try_grow(self: &Rc<Self>, need: [i32; 2], available: [i32; 2]) -> bool {
+        if need.iter().zip(available).any(|(&n, a)| n - a > 16) {
+            return false;
+        }
         if glib::monotonic_time() - self.shrunk_at.get() < 1_000_000 || self.fills_screen() {
             return false;
         }
@@ -1900,6 +1952,20 @@ impl Win {
             self.state
                 .borrow_mut()
                 .remember(self.mode.get(), width, height);
+        }
+    }
+
+    /// Remember the window's size now and write it to disk.
+    fn save_size(&self) {
+        self.store_size();
+        if self.settings.bool("remember_size") {
+            let state = self.state.borrow();
+            debug(&format!(
+                "saving sizes: standard {:?}, scientific {:?}",
+                state.size_for(Mode::Standard),
+                state.size_for(Mode::Scientific)
+            ));
+            state.save();
         }
     }
 

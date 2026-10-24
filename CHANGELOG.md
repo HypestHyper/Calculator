@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.1 — 2026-10-24
+
+### Fixed
+
+- Switching modes keeps the size you set. Opening scientific mode from a small window gives a scientific window of the same height, wider in the same proportion as the defaults; closing it goes back to the matching standard width. Before, each mode had its own remembered size, so a size set in one mode was lost in the other.
+- A small window no longer jumps back to full size after closing scientific mode.
+- The scientific keys are scaled down with the rest when the panel opens in a small window.
+- The window size is also saved when the app is stopped by logging out or shutting down, not only when its window is closed.
+
 ## 2.0.0 — 2026-10-22
 
 Calculator is now written in Rust only. The Python version is gone; the Rust one looks and works the same, keeps your settings and history, and starts nearly twice as fast.

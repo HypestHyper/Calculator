@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 2.0.0" src="https://img.shields.io/badge/version-2.0.0-6750A4">
+  <img alt="Version 2.0.1" src="https://img.shields.io/badge/version-2.0.1-6750A4">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-informational">
   <img alt="Rust 1.88+" src="https://img.shields.io/badge/rust-1.88%2B-B7410E">
@@ -47,7 +47,7 @@
 - The launcher icon is recoloured to match the current palette.
 - Full keyboard input.
 - Point or comma as the decimal symbol (Preferences → Display). It is used for display, copy and paste; both `.` and `,` keys type it.
-- Window size is remembered separately for each mode. Made smaller than its normal size, the window scales its keys and text down to fit, to about half size.
+- The window keeps the size you give it, and the mode you were in, between sessions. Switching modes keeps the height and widens or narrows the window to match. Made smaller than its normal size, the window scales its keys and text down to fit, to about half size.
 
 ## Requirements
 

@@ -38,6 +38,11 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="2.0.1" date="2026-10-24">
+      <description>
+        <p>Switching modes keeps the window size you set, and small windows stay small.</p>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-10-22">
       <description>
         <p>Rust only, a window that scales down to about half size, and a smoother shrink on Hyprland.</p>

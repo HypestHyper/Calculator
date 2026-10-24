@@ -406,9 +406,18 @@ impl WindowState {
         self.scientific = Mode::Scientific.default_size();
     }
 
+    /// Remember the size for `mode`, and give the other mode the same height
+    /// and the width that keeps the two defaults' proportions, so switching
+    /// keeps the size the user chose.
     pub fn remember(&mut self, mode: Mode, width: i32, height: i32) {
         if width > 100 && height > 100 {
             self.set(mode, (width, height));
+            let other = match mode {
+                Mode::Standard => Mode::Scientific,
+                Mode::Scientific => Mode::Standard,
+            };
+            let ratio = f64::from(other.default_size().0) / f64::from(mode.default_size().0);
+            self.set(other, ((f64::from(width) * ratio).round() as i32, height));
         }
     }
 
@@ -580,6 +589,15 @@ mod tests {
         history.add("2×3", "6", 6.0);
         assert_eq!(history.items()[0].expr, "2×3");
         assert_eq!(History::load(path, true).items().len(), 2);
+    }
+
+    #[test]
+    fn remembering_one_mode_sizes_the_other() {
+        let mut state = WindowState::load(temp("ratio").join("window.json"));
+        state.remember(Mode::Standard, 250, 400);
+        assert_eq!(state.size_for(Mode::Scientific), (450, 400));
+        state.remember(Mode::Scientific, 900, 500);
+        assert_eq!(state.size_for(Mode::Standard), (500, 500));
     }
 
     #[test]
