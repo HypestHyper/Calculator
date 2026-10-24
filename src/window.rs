@@ -1937,7 +1937,11 @@ impl Win {
         }
         let h = gtk::Orientation::Horizontal;
         let own = self.sci_revealer.measure(h, -1).0 + self.standard_grid.measure(h, -1).0;
-        let room = self.keypad.parent().map_or(0, |slot| slot.width());
+        // The keypad's slot, less whatever the window is too narrow for: the
+        // stretched keypad holds the slot at its own width, so the slot
+        // alone would never show that it has to narrow again.
+        let overflow = (self.body_box.child().width() - self.body_box.width()).max(0);
+        let room = self.keypad.parent().map_or(0, |slot| slot.width()) - overflow;
         let width = room.min((f64::from(own) * MAX_KEY_STRETCH) as i32);
         let stretch = if width > own + 1 { width - own } else { 0 };
         if stretch != self.stretch.get() {
