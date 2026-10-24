@@ -115,7 +115,11 @@ fn main() -> glib::ExitCode {
         -1
     });
 
-    app.connect_is_registered_notify(|_| timing::mark("app name registered"));
+    app.connect_is_registered_notify(|app| {
+        if app.is_registered() {
+            timing::mark("app name registered");
+        }
+    });
     // Any icon looked up in the icon theme waits for the whole theme to load:
     // with a large one, or one without an icon cache, a few hundred ms. GTK
     // checks for the app's icon while it starts unless an icon is already
