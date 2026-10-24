@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.2 — 2026-10-24
+
+### Fixed
+
+- On Hyprland, the window size you set is remembered, between modes and after a restart. GTK stops following a window's size while the compositor reports it as tiled, and Hyprland reports floating windows as tiled, so the app kept saving its first size. It now reads the window's real size there.
+
 ## 2.0.1 — 2026-10-24
 
 ### Fixed

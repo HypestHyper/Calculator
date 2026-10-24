@@ -902,6 +902,22 @@ impl Win {
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
             .connect_default_height_notify(on!(self, win, |_| win.on_resize()));
+        // The surface's size changes even where the default size doesn't
+        // follow it (see current_size).
+        let weak = Rc::downgrade(self);
+        self.window.connect_realize(move |window| {
+            let Some(surface) = window.surface() else {
+                return;
+            };
+            for property in ["width", "height"] {
+                let weak = weak.clone();
+                surface.connect_notify_local(Some(property), move |_, _| {
+                    if let Some(win) = weak.upgrade() {
+                        win.on_resize();
+                    }
+                });
+            }
+        });
     }
 
     // ----------------------------------------------------------- input
@@ -1207,7 +1223,7 @@ impl Win {
         if start_w <= 1 || !self.window.is_mapped() {
             return;
         }
-        let shrink_by = self.window.default_size().0 - self.size_for(Mode::Standard).0;
+        let shrink_by = self.current_size().0 - self.size_for(Mode::Standard).0;
         let min_w = grid.measure(gtk::Orientation::Horizontal, -1).0;
         let end_w = (start_w + self.sci_revealer.width() - shrink_by).max(min_w);
         self.pinned.set(true);
@@ -1815,7 +1831,7 @@ impl Win {
         if self.grow_tried.replace(Some(need)) == Some(need) {
             return false;
         }
-        let (width, height) = self.window.default_size();
+        let (width, height) = self.current_size();
         let width = width + (need[0] - available[0]).max(0);
         let height = height + (need[1] - available[1]).max(0);
         debug(&format!("growing to {width}x{height} to fit the contents"));
@@ -1945,9 +1961,7 @@ impl Win {
         if self.sci_revealer.reveals_child() != self.sci_revealer.is_child_revealed() {
             return; // mid-transition; the size is not the user's
         }
-        // default-size tracks the real size in GTK 4 and uses the same units
-        // as set_default_size(), so restoring never drifts.
-        let (width, height) = self.window.default_size();
+        let (width, height) = self.current_size();
         if width > 0 && height > 0 {
             self.state
                 .borrow_mut()
@@ -1969,8 +1983,35 @@ impl Win {
         }
     }
 
+    /// The window's size, in the units of set_default_size().
+    ///
+    /// GTK keeps the default size up to date with the real size, so
+    /// restoring never drifts, but not while the compositor calls the window
+    /// tiled or maximized. Hyprland calls floating windows tiled, so there the
+    /// default size stays at what the app last asked for; the real size is
+    /// used instead.
+    fn current_size(&self) -> (i32, i32) {
+        let untracked = gdk::ToplevelState::TILED
+            | gdk::ToplevelState::TOP_TILED
+            | gdk::ToplevelState::RIGHT_TILED
+            | gdk::ToplevelState::BOTTOM_TILED
+            | gdk::ToplevelState::LEFT_TILED
+            | gdk::ToplevelState::MAXIMIZED;
+        let tracked = self
+            .window
+            .surface()
+            .and_downcast::<gdk::Toplevel>()
+            .is_none_or(|toplevel| !toplevel.state().intersects(untracked));
+        let (width, height) = (self.window.width(), self.window.height());
+        if tracked || width <= 1 || height <= 1 {
+            self.window.default_size()
+        } else {
+            (width, height)
+        }
+    }
+
     fn on_resize(self: &Rc<Self>) {
-        let size = self.window.default_size();
+        let size = self.current_size();
         let last = self.last_size.replace(size);
         if size.0 < last.0 || size.1 < last.1 {
             self.shrunk_at.set(glib::monotonic_time()); // made smaller: scale, don't grow back

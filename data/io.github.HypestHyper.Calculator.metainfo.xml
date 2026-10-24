@@ -38,6 +38,11 @@
     <category>Calculator</category>
   </categories>
   <releases>
+    <release version="2.0.2" date="2026-10-24">
+      <description>
+        <p>The window size is remembered on Hyprland.</p>
+      </description>
+    </release>
     <release version="2.0.1" date="2026-10-24">
       <description>
         <p>Switching modes keeps the window size you set, and small windows stay small.</p>
