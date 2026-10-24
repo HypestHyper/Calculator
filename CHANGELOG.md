@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The window opens smaller by default: 220×330 in standard mode, 396×330 in scientific mode.
+
+### Added
+
+- On Hyprland, the window opens where it was when last closed. A position that is no longer on any monitor is ignored.
+
 ## 2.0.2 — 2026-10-24
 
 ### Fixed

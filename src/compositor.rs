@@ -282,3 +282,75 @@ impl Stepper {
         }
     }
 }
+
+/// Where this app's window's centre is now. Blocks briefly: used while the
+/// window closes, when there is no time to wait for an answer.
+pub fn hyprland_window_center(debug: &Debug) -> Option<(i32, i32)> {
+    let out = std::process::Command::new("hyprctl")
+        .args(["clients", "-j"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    let client = find_client(&String::from_utf8_lossy(&out.stdout), debug)?;
+    let ((x, y), (w, h)) = (client.at, client.size);
+    Some(((x + w / 2.0).round() as i32, (y + h / 2.0).round() as i32))
+}
+
+/// Move this app's window so its centre is at (cx, cy), without Hyprland's
+/// animation, if that point is on a monitor.
+pub fn hyprland_move_center(cx: i32, cy: i32, debug: Debug) {
+    run(&["hyprctl", "monitors", "-j"], move |ok, out| {
+        let monitors = ok
+            .then(|| serde_json::from_str::<Vec<serde_json::Value>>(&out).ok())
+            .flatten()
+            .unwrap_or_default();
+        let on_screen = monitors.iter().any(|m| {
+            let n = |key: &str| m.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let scale = if n("scale") > 0.0 { n("scale") } else { 1.0 };
+            // Rotated monitors (odd transforms) swap width and height.
+            let (mut w, mut h) = (n("width") / scale, n("height") / scale);
+            if m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0) % 2 == 1 {
+                std::mem::swap(&mut w, &mut h);
+            }
+            let (x, y) = (n("x"), n("y"));
+            let (cx, cy) = (f64::from(cx), f64::from(cy));
+            cx >= x && cx < x + w && cy >= y && cy < y + h
+        });
+        if !on_screen {
+            debug("saved position is off every monitor; leaving the window where it opened");
+            return;
+        }
+        run(&["hyprctl", "clients", "-j"], move |ok, out| {
+            let client = ok.then(|| find_client(&out, &debug)).flatten();
+            let Some(Client {
+                target,
+                size: (w, h),
+                ..
+            }) = client
+            else {
+                return;
+            };
+            let nx = (f64::from(cx) - w / 2.0).round() as i64;
+            let ny = (f64::from(cy) - h / 2.0).round() as i64;
+            let debug2 = debug.clone();
+            let target2 = target.clone();
+            set_no_anim(&target, "1", debug.clone(), move |_| {
+                dispatch(
+                    format!(
+                        r#"hl.dsp.window.move({{ x = {nx}, y = {ny}, relative = false, window = "{target2}" }})"#
+                    ),
+                    vec![
+                        "movewindowpixel".to_string(),
+                        format!("exact {nx} {ny},{target2}"),
+                    ],
+                    debug2.clone(),
+                    move |_| {
+                        glib::timeout_add_local_once(Duration::from_millis(100), move || {
+                            set_no_anim(&target2, "unset", debug2, |_| {});
+                        });
+                    },
+                );
+            });
+        });
+    });
+}

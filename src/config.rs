@@ -329,6 +329,10 @@ impl Settings {
 // Window state and history (JSON in the state dir)
 // --------------------------------------------------------------------------
 
+/// The scientific window is this much wider than the standard one, at the
+/// same height.
+pub const SCIENTIFIC_WIDTH_RATIO: f64 = 1.8;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
     Standard,
@@ -345,8 +349,8 @@ impl Mode {
 
     pub fn default_size(self) -> (i32, i32) {
         match self {
-            Mode::Standard => (400, 640),
-            Mode::Scientific => (720, 640),
+            Mode::Standard => (220, 330),
+            Mode::Scientific => ((220.0 * SCIENTIFIC_WIDTH_RATIO).round() as i32, 330),
         }
     }
 }
@@ -355,6 +359,8 @@ pub struct WindowState {
     path: PathBuf,
     standard: (i32, i32),
     scientific: (i32, i32),
+    /// Where the window's centre was, where the compositor tells (Hyprland).
+    pub center: Option<(i32, i32)>,
 }
 
 impl WindowState {
@@ -367,6 +373,7 @@ impl WindowState {
             path,
             standard: Mode::Standard.default_size(),
             scientific: Mode::Scientific.default_size(),
+            center: None,
         };
         let data: serde_json::Value = fs::read_to_string(&state.path)
             .ok()
@@ -384,6 +391,13 @@ impl WindowState {
                 state.set(mode, (w as i32, h as i32));
             }
         }
+        state.center =
+            data.get("center")
+                .and_then(|v| v.as_array())
+                .and_then(|a| match a.as_slice() {
+                    [x, y] => Some((x.as_i64()? as i32, y.as_i64()? as i32)),
+                    _ => None,
+                });
         state
     }
 
@@ -407,7 +421,7 @@ impl WindowState {
     }
 
     /// Remember the size for `mode`, and give the other mode the same height
-    /// and the width that keeps the two defaults' proportions, so switching
+    /// and the width in SCIENTIFIC_WIDTH_RATIO proportion, so switching
     /// keeps the size the user chose.
     pub fn remember(&mut self, mode: Mode, width: i32, height: i32) {
         if width > 100 && height > 100 {
@@ -416,16 +430,22 @@ impl WindowState {
                 Mode::Standard => Mode::Scientific,
                 Mode::Scientific => Mode::Standard,
             };
-            let ratio = f64::from(other.default_size().0) / f64::from(mode.default_size().0);
+            let ratio = match mode {
+                Mode::Standard => SCIENTIFIC_WIDTH_RATIO,
+                Mode::Scientific => 1.0 / SCIENTIFIC_WIDTH_RATIO,
+            };
             self.set(other, ((f64::from(width) * ratio).round() as i32, height));
         }
     }
 
     pub fn save(&self) {
-        let data = serde_json::json!({
+        let mut data = serde_json::json!({
             "standard": [self.standard.0, self.standard.1],
             "scientific": [self.scientific.0, self.scientific.1],
         });
+        if let Some((x, y)) = self.center {
+            data["center"] = serde_json::json!([x, y]);
+        }
         let text = serde_json::to_string_pretty(&data).unwrap();
         if let Err(err) = write_atomic(&self.path, &text) {
             eprintln!("calculator: could not write {}: {err}", self.path.display());
@@ -592,6 +612,16 @@ mod tests {
     }
 
     #[test]
+    fn window_state_keeps_the_centre() {
+        let path = temp("centre").join("window.json");
+        let mut state = WindowState::load(path.clone());
+        assert_eq!(state.center, None);
+        state.center = Some((1610, 365));
+        state.save();
+        assert_eq!(WindowState::load(path).center, Some((1610, 365)));
+    }
+
+    #[test]
     fn remembering_one_mode_sizes_the_other() {
         let mut state = WindowState::load(temp("ratio").join("window.json"));
         state.remember(Mode::Standard, 250, 400);
@@ -606,7 +636,7 @@ mod tests {
         let path = dir.join("window.json");
         fs::write(&path, r#"{"standard": [50, 50], "scientific": [800, 700]}"#).unwrap();
         let state = WindowState::load(path);
-        assert_eq!(state.size_for(Mode::Standard), (400, 640));
+        assert_eq!(state.size_for(Mode::Standard), (220, 330));
         assert_eq!(state.size_for(Mode::Scientific), (800, 700));
     }
 }

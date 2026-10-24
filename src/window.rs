@@ -902,6 +902,23 @@ impl Win {
             .connect_default_width_notify(on!(self, win, |_| win.on_resize()));
         self.window
             .connect_default_height_notify(on!(self, win, |_| win.on_resize()));
+        // Back where it was last time, where the compositor allows it.
+        let weak = Rc::downgrade(self);
+        let placed = Cell::new(false);
+        self.window.connect_map(move |_| {
+            let Some(win) = weak.upgrade() else { return };
+            if placed.replace(true) || !compositor::is_hyprland() {
+                return;
+            }
+            if !win.settings.bool("remember_size") {
+                return;
+            }
+            let center = win.state.borrow().center;
+            if let Some((x, y)) = center {
+                debug(&format!("moving the window back to centre {x},{y}"));
+                compositor::hyprland_move_center(x, y, Rc::new(debug));
+            }
+        });
         // The surface's size changes even where the default size doesn't
         // follow it (see current_size).
         let weak = Rc::downgrade(self);
@@ -1973,11 +1990,18 @@ impl Win {
     fn save_size(&self) {
         self.store_size();
         if self.settings.bool("remember_size") {
+            if compositor::is_hyprland() && self.window.is_mapped() {
+                let center = compositor::hyprland_window_center(&(Rc::new(debug) as _));
+                if center.is_some() {
+                    self.state.borrow_mut().center = center;
+                }
+            }
             let state = self.state.borrow();
             debug(&format!(
-                "saving sizes: standard {:?}, scientific {:?}",
+                "saving sizes: standard {:?}, scientific {:?}, centre {:?}",
                 state.size_for(Mode::Standard),
-                state.size_for(Mode::Scientific)
+                state.size_for(Mode::Scientific),
+                state.center
             ));
             state.save();
         }

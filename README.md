@@ -47,7 +47,7 @@
 - The launcher icon is recoloured to match the current palette.
 - Full keyboard input.
 - Point or comma as the decimal symbol (Preferences → Display). It is used for display, copy and paste; both `.` and `,` keys type it.
-- The window keeps the size you give it, and the mode you were in, between sessions. Switching modes keeps the height and widens or narrows the window to match. Made smaller than its normal size, the window scales its keys and text down to fit, to about half size.
+- The window keeps the size you give it, the mode you were in and, on Hyprland, its position, between sessions. It opens small by default (220×330). Switching modes keeps the height and widens or narrows the window to match. Made smaller than its normal size, the window scales its keys and text down to fit, to about half size.
 
 ## Requirements
 
