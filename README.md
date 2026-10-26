@@ -40,6 +40,7 @@
 ## Features
 
 - Standard and scientific modes. Scientific adds trigonometric functions (degrees or radians), logarithms, powers, roots, factorial, absolute value, modulo, π, e, `Ans` and E notation.
+- A unit converter, as a third tab: length, weight, temperature, volume, area, speed, time, data, pressure, energy, power, angle and fuel economy, about 100 units. Type the value on the keypad, expressions included; the category and units are remembered.
 - Live result preview while typing; pressing `=` again repeats the last operation.
 - History of past results, saved between sessions (can be turned off).
 - Colours from the desktop through the XDG Desktop Portal, GSettings or the GTK theme, so it works on GNOME, KDE, Hyprland, niri, Sway and others.
@@ -189,7 +190,7 @@ Development builds (`cargo run` without `--release`) start as a separate app eve
 
 The app has switches for screenshots and timing:
 
-- `CALCULATOR_SCREENSHOT=out.png CALCULATOR_KEYS="digit:7 op:× digit:6 eq:"` runs the steps, saves the window as a PNG and quits. Steps are key actions or `ui:mode`, `ui:inv`, `ui:angle`, `ui:history`, `ui:prefs` (the screenshot is then of Preferences), `ui:scroll:N` (scroll Preferences), `ui:set:key=value` (change a setting), `ui:size:WxH` (resize the window) and `ui:wait` (one second).
+- `CALCULATOR_SCREENSHOT=out.png CALCULATOR_KEYS="digit:7 op:× digit:6 eq:"` runs the steps, saves the window as a PNG and quits. Steps are key actions or `ui:mode`, `ui:inv`, `ui:angle`, `ui:history`, `ui:convert`, `ui:category:KEY` (a converter category), `ui:prefs` (the screenshot is then of Preferences), `ui:scroll:N` (scroll Preferences), `ui:set:key=value` (change a setting), `ui:size:WxH` (resize the window) and `ui:wait` (one second).
 - `CALCULATOR_QUIT_ON_FIRST_FRAME=1` quits as soon as the window is drawn, to time start-up.
 - `CALCULATOR_TIMING=1` prints how long each step of start-up took. See [docs/startup-performance.md](docs/startup-performance.md) for what made start-up slow and what fixed it.
 - The app uses GTK's GL renderer, which starts faster than the Vulkan one newer GTK versions default to. Set `GSK_RENDERER` (for example `vulkan` or `cairo`) to choose another.
@@ -200,6 +201,8 @@ The app has switches for screenshots and timing:
 | `src/logic.rs` | Key handling |
 | `src/colors.rs` | Palette generation, presets, palette.toml |
 | `src/scale.rs`, `src/scale_box.rs` | Scaling down in small windows |
+| `src/units.rs` | Unit conversions |
+| `src/converter.rs` | The unit converter's view |
 | `src/main.rs` | Start-up, command-line options, development switches |
 | `src/window.rs`, `src/preferences.rs` | User interface |
 | `src/theme.rs` | Desktop colours (portal, GSettings, GTK) and CSS |

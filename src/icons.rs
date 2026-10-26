@@ -53,6 +53,9 @@ fn lookup(name: &str) -> (u32, &'static str) {
         "replay" => (0xE042, "view-refresh-symbolic"),
         "keyboard" => (0xE312, "input-keyboard-symbolic"),
         "drag_indicator" => (0xE945, "list-drag-handle-symbolic"),
+        "straighten" => (0xE41C, "view-paged-symbolic"),
+        "expand_more" => (0xE5CF, "pan-down-symbolic"),
+        "swap_vert" => (0xE8D5, "object-flip-vertical-symbolic"),
         _ => {
             eprintln!("calculator: unknown icon {name}");
             (0xE88E, "image-missing-symbolic")

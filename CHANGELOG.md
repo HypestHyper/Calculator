@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A unit converter, as a third tab next to Standard and Scientific. It covers length, weight, temperature, volume, area, speed, time, data (both 1000 and 1024 based), pressure, energy, power, angle and fuel economy: about 100 units, with exact definitions where there are any. The value is typed on the keypad, so expressions such as 12×2.54 work; the swap button turns the result into the new value. The category and the units last used in each category are remembered, and Ctrl+C copies the result.
+
+### Changed
+
+- The mode tabs are narrower, so three fit without widening the window.
+
 ## 2.0.3 — 2026-10-24
 
 Starts about four times faster (400 ms to 100 ms on a Hyprland machine with the Papirus icon theme; see [docs/startup-performance.md](docs/startup-performance.md)), opens where you left it, and keeps its proportions when resized.

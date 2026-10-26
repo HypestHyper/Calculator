@@ -329,6 +329,42 @@ impl Settings {
 // Window state and history (JSON in the state dir)
 // --------------------------------------------------------------------------
 
+/// The unit converter's state: whether it is open, the category, and the
+/// units last used in each category. Kept with the window sizes.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ConverterState {
+    #[serde(skip)]
+    path: PathBuf,
+    #[serde(default)]
+    pub open: bool,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub units: std::collections::BTreeMap<String, (String, String)>,
+}
+
+impl ConverterState {
+    pub fn load_default() -> Self {
+        Self::load(state_dir().join("converter.json"))
+    }
+
+    pub fn load(path: PathBuf) -> Self {
+        let mut state: ConverterState = fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
+        state.path = path;
+        state
+    }
+
+    pub fn save(&self) {
+        let text = serde_json::to_string_pretty(self).unwrap();
+        if let Err(err) = write_atomic(&self.path, &text) {
+            eprintln!("calculator: could not write {}: {err}", self.path.display());
+        }
+    }
+}
+
 /// By default, the scientific window is this much wider than the standard
 /// one, at the same height; remembered sizes use the panel's real width.
 pub const SCIENTIFIC_WIDTH_RATIO: f64 = 1.8;
@@ -636,6 +672,22 @@ mod tests {
         assert_eq!(state.size_for(Mode::Scientific), (450, 400));
         state.remember(Mode::Scientific, 900, 500, 400);
         assert_eq!(state.size_for(Mode::Standard), (500, 500));
+    }
+
+    #[test]
+    fn converter_state_round_trips() {
+        let path = temp("converter").join("converter.json");
+        let mut state = ConverterState::load(path.clone());
+        assert!(!state.open && state.units.is_empty());
+        state.open = true;
+        state.category = "length".into();
+        state
+            .units
+            .insert("length".into(), ("mm".into(), "in".into()));
+        state.save();
+        let state = ConverterState::load(path);
+        assert!(state.open);
+        assert_eq!(state.units["length"], ("mm".into(), "in".into()));
     }
 
     #[test]

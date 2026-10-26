@@ -13,6 +13,7 @@ use gtk::{gdk, gio, glib, pango};
 
 use crate::compositor;
 use crate::config::{History, Mode, Settings, Value, WindowState, APP_NAME};
+use crate::converter::Converter;
 use crate::icons::{icon, icon_button};
 use crate::motion::{self, Anim, Animated, KeyMotion, Kind, Scheme};
 use crate::placement;
@@ -377,6 +378,9 @@ pub struct Win {
 
     std_toggle: gtk::ToggleButton,
     sci_toggle: gtk::ToggleButton,
+    conv_toggle: gtk::ToggleButton,
+    converter: Rc<Converter>,
+    display_stack: gtk::Stack,
     history_btn: gtk::ToggleButton,
     prefs_btn: gtk::Button,
     angle_chip: gtk::Label,
@@ -609,7 +613,12 @@ impl Win {
             .tooltip_text("Scientific (Ctrl+S)")
             .build();
         sci_toggle.set_group(Some(&std_toggle));
-        for b in [&std_toggle, &sci_toggle] {
+        let conv_toggle = gtk::ToggleButton::builder()
+            .child(&icon("straighten", 20))
+            .tooltip_text("Unit converter")
+            .build();
+        conv_toggle.set_group(Some(&std_toggle));
+        for b in [&std_toggle, &sci_toggle, &conv_toggle] {
             b.set_focus_on_click(false);
             group.append(b);
         }
@@ -648,7 +657,18 @@ impl Win {
             .spacing(2)
             .css_classes(["display"])
             .build();
-        handle.set_child(Some(&display));
+        // The calculator's display, or the unit converter in its place; the
+        // keypad below serves both.
+        let converter = Converter::new();
+        let display_stack = gtk::Stack::builder()
+            .transition_type(gtk::StackTransitionType::Crossfade)
+            .transition_duration(150)
+            .vhomogeneous(false)
+            .hhomogeneous(false)
+            .build();
+        display_stack.add_named(&display, Some("calculator"));
+        display_stack.add_named(&converter.root, Some("converter"));
+        handle.set_child(Some(&display_stack));
         root.append(&handle);
 
         let top = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -842,6 +862,9 @@ impl Win {
             sci_anims: parts.sci_anims,
             std_toggle,
             sci_toggle,
+            conv_toggle,
+            converter,
+            display_stack,
             history_btn,
             prefs_btn,
             angle_chip,
@@ -903,6 +926,9 @@ impl Win {
         win.apply_size_for(mode, true);
         win.prepare_position();
         win.connect_signals();
+        if win.converter.is_open() && !win.settings.bool("scientific") {
+            win.conv_toggle.set_active(true);
+        }
         win.rebuild_history();
         win.apply_settings();
         win.refresh(None, false);
@@ -920,6 +946,8 @@ impl Win {
         }
         self.sci_toggle
             .connect_toggled(on!(self, win, |button| win.on_mode_toggled(button.is_active())));
+        self.conv_toggle
+            .connect_toggled(on!(self, win, |button| win.set_converting(button.is_active())));
         self.prefs_btn
             .connect_clicked(on!(self, win, |_| win.show_preferences()));
         self.history_btn
@@ -1150,6 +1178,12 @@ impl Win {
     }
 
     pub fn press(self: &Rc<Self>, action: &str) {
+        if self.conv_toggle.is_active() {
+            if self.converter.press(action) == Status::Error {
+                self.expr_anim.shake();
+            }
+            return;
+        }
         let status = self.calc.borrow_mut().press(action);
         if action.starts_with("func:") && self.inverse.get() {
             self.inv_button.set_active(false);
@@ -1189,6 +1223,7 @@ impl Win {
         let decimals = self.decimals();
         let grouping = self.settings.bool("digit_grouping");
         let calc = self.calc.borrow();
+        self.converter.set_format(decimals, grouping, calc.decimal);
         let text = calc.display(decimals, grouping);
         self.expr_label.set_label(&text);
         self.fit_text(&text);
@@ -1270,6 +1305,36 @@ impl Win {
     }
 
     // ----------------------------------------------------------- modes
+    /// The converter's values' text size at the current settings and scale.
+    fn converter_text_size(&self) -> f64 {
+        let base = match self.settings.str("text_size").as_str() {
+            "small" => 32.0,
+            "large" => 50.0,
+            _ => 40.0,
+        };
+        base * font_factor(self.scale.get())
+    }
+
+    /// Show the unit converter in place of the display, or the display
+    /// again. It uses the standard layout: the scientific keys close.
+    fn set_converting(self: &Rc<Self>, on: bool) {
+        self.display_stack
+            .set_visible_child_name(if on { "converter" } else { "calculator" });
+        // A hidden view keeps the styles it had when hidden (see set_mode).
+        let shown: gtk::Widget = if on {
+            self.converter.root.clone().upcast()
+        } else {
+            self.display_stack.child_by_name("calculator").unwrap()
+        };
+        shown.add_css_class("restyle");
+        shown.remove_css_class("restyle");
+        self.converter.set_open(on);
+        if on && self.settings.bool("scientific") {
+            let _ = self.settings.set("scientific", Value::Bool(false));
+        }
+        self.queue_scale();
+    }
+
     fn on_mode_toggled(&self, scientific: bool) {
         if scientific != self.settings.bool("scientific") {
             let _ = self.settings.set("scientific", Value::Bool(scientific));
@@ -1706,6 +1771,12 @@ impl Win {
             "inv" => toggle(&self.inv_button),
             "angle" => toggle(&self.angle_button),
             "history" => toggle(&self.history_btn),
+            "convert" => self.conv_toggle.set_active(true),
+            "standard" => self.std_toggle.set_active(true),
+            "units" => self.converter.dev_open_units(),
+            _ if action.starts_with("category:") => {
+                self.converter.dev_category(&action["category:".len()..]);
+            }
             _ if action.starts_with("size:") => {
                 // size:WxH, as if the user resized the window
                 let size = action["size:".len()..].split_once('x');
@@ -1759,7 +1830,14 @@ impl Win {
 
     // ----------------------------------------------------------- clipboard
     fn copy_result(self: &Rc<Self>) {
-        let text = self.calc.borrow().copy_text(self.decimals());
+        let text = if self.conv_toggle.is_active() {
+            let Some(text) = self.converter.copy_text() else {
+                return;
+            };
+            text
+        } else {
+            self.calc.borrow().copy_text(self.decimals())
+        };
         self.window.clipboard().set_text(&text);
         self.show_snackbar(&format!("Copied {text}"));
     }
@@ -1783,6 +1861,10 @@ impl Win {
                 let (Some(win), Ok(Some(text))) = (weak.upgrade(), result) else {
                     return;
                 };
+                if win.conv_toggle.is_active() {
+                    win.converter.paste(&text);
+                    return;
+                }
                 let status = win.calc.borrow_mut().paste(&text);
                 if status == Status::Ok {
                     win.refresh(None, false);
@@ -1910,6 +1992,7 @@ impl Win {
         let weak = Rc::downgrade(self);
         glib::idle_add_local_once(move || {
             if let Some(win) = weak.upgrade() {
+                win.converter.set_base_size(win.converter_text_size());
                 win.update_scale();
             }
         });

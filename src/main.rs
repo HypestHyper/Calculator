@@ -3,6 +3,7 @@
 mod app_icon;
 mod compositor;
 mod config;
+mod converter;
 mod icons;
 mod motion;
 mod placement;
@@ -266,7 +267,7 @@ impl App {
 
 /// For development: run the steps in CALCULATOR_KEYS (space-separated key
 /// actions such as "digit:7 op:× eq:", or "ui:mode", "ui:inv", "ui:angle",
-/// "ui:history", "ui:size:WxH", "ui:wait"), then save the window as a PNG and quit. Each
+/// "ui:history", "ui:convert", "ui:category:KEY", "ui:size:WxH", "ui:wait"), then save the window as a PNG and quit. Each
 /// "ui:wait" pauses a second, for transitions.
 fn screenshot_and_quit(app: &gtk::Application, running: Rc<App>, path: String) {
     let keys = std::env::var("CALCULATOR_KEYS").unwrap_or_default();
