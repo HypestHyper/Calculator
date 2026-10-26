@@ -9,6 +9,7 @@
 ### Changed
 
 - The mode tabs are narrower, so three fit without widening the window.
+- Switching between standard and scientific mode is smoother: the keys keep their stretch and change size along with the sliding panel, and the calculator fits the new window as soon as the slide is over, instead of a second and a half later.
 
 ## 2.0.3 — 2026-10-24
 

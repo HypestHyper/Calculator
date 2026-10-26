@@ -970,6 +970,7 @@ impl Win {
                 }
                 if revealer.is_child_revealed() && win.mode.get() == Mode::Scientific {
                     win.release_keypad();
+                    win.queue_scale();
                 }
             }));
         for key in self
@@ -1381,7 +1382,7 @@ impl Win {
             self.apply_size_for(new_mode, false); // grow first, then slide in
             self.sci_revealer.set_hexpand(true);
             self.sci_grid.set_visible(true);
-            self.hold_keypad();
+            self.hold_keypad(None);
             self.sci_revealer.set_reveal_child(true);
             // A hidden panel keeps the styles it had when hidden; restyle it
             // for the current scale.
@@ -1471,7 +1472,16 @@ impl Win {
         let shrink_by = self.current_size().0 - self.size_for(Mode::Standard).0;
         self.pinned.set(true);
         let pinned_window_w = self.window.width();
-        self.hold_keypad();
+        // The standard keys' width once the window has shrunk.
+        let h = gtk::Orientation::Horizontal;
+        let own = self.standard_grid.measure(h, -1).0;
+        let slot = self.keypad.parent().map_or(0, |slot| slot.width()) - self.panel_width();
+        let width = slot.min((f64::from(own) * MAX_KEY_STRETCH) as i32);
+        self.hold_keypad(Some(width));
+        // The standard keys don't narrow on the way: they only grow, into
+        // the width above.
+        self.standard_grid
+            .set_size_request(self.standard_grid.width().min(width), -1);
         self.sci_grid.set_size_request(self.sci_grid.width(), -1);
         self.sci_grid.set_halign(gtk::Align::End);
 
@@ -1500,17 +1510,21 @@ impl Win {
     /// Keep the keys where they are, against the right edge, while the
     /// scientific panel opens or closes and the window resizes around them:
     /// centred, they would drift as the panel changes width. The gap kept on
-    /// the right is the one centring gave, so nothing moves now, and the
-    /// result is centred again once the window has its new width.
-    fn hold_keypad(&self) {
+    /// the right is the one centring gave, so nothing moves now.
+    ///
+    /// The keypad keeps its width meanwhile, so the keys change size along
+    /// with the panel rather than all at once: opening, the standard keys
+    /// give up their stretch as the panel comes in; closing, `width` is the
+    /// width they will have, which they grow into as the panel goes.
+    fn hold_keypad(&self, width: Option<i32>) {
         if self.keypad.halign() != gtk::Align::Center {
             return;
         }
-        // The keys at their own width while the panel moves.
-        self.keypad.set_size_request(-1, -1);
+        let now = self.keypad.width();
         let slot = self.keypad.parent().map_or(0, |slot| slot.width());
-        let own = self.keypad.width() - self.stretch.replace(0);
-        let gap = ((slot - own) / 2).max(0);
+        let gap = ((slot - now) / 2).max(0);
+        self.keypad.set_size_request(width.unwrap_or(now), -1);
+        self.stretch.set(-1); // set afresh once released
         self.keypad.set_margin_end(gap);
         self.keypad.set_halign(gtk::Align::End);
     }
@@ -1524,6 +1538,7 @@ impl Win {
         if !self.pinned.replace(false) {
             return;
         }
+        self.standard_grid.set_size_request(-1, -1);
         self.sci_grid
             .set_size_request(scaled(SCI_PANEL_WIDTH, self.scale.get()), -1);
         self.sci_grid.set_halign(gtk::Align::Fill);
@@ -2004,7 +2019,7 @@ impl Win {
         let h = gtk::Orientation::Horizontal;
         let v = gtk::Orientation::Vertical;
         // Not counting the keys' stretch: that is extra width, not needed.
-        let body_width = body.measure(h, -1).0 - self.stretch.get();
+        let body_width = body.measure(h, -1).0 - self.stretch.get().max(0);
         [
             header.measure(h, -1).0.max(body_width),
             header.measure(v, -1).0 + body.measure(v, -1).0,
@@ -2074,9 +2089,11 @@ impl Win {
     /// space the scale can't use goes to the display.
     fn update_scale(self: &Rc<Self>) {
         self.scale_pending.set(false);
-        let switching = glib::monotonic_time() - self.mode_changed_at.get() < 1_500_000;
-        if switching || self.pinned.get() || !self.window.is_mapped() {
-            return; // sizes during a mode switch belong to the transition
+        // Sizes while the panel slides, or the window shrinks after it,
+        // belong to the transition; rescaled as soon as that is over.
+        let sliding = self.sci_revealer.reveals_child() != self.sci_revealer.is_child_revealed();
+        if sliding || self.pinned.get() || !self.window.is_mapped() {
+            return;
         }
         let available = [
             self.body_box.width(),
