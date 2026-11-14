@@ -63,7 +63,14 @@ fn number(value: f64) -> String {
 
 /// Limit a selector to the calculator window; None for Preferences rules.
 fn scoped(selector: &str) -> Option<String> {
-    if selector.is_empty() || selector.contains("calc-prefs") {
+    // Not Preferences, nor pop-ups (the pickers' menus): those open outside
+    // the window, so they keep their full size (and 48px rows) however small
+    // it is.
+    if selector.is_empty()
+        || selector.contains("calc-prefs")
+        || selector.starts_with("popover")
+        || selector.contains("picker-list")
+    {
         return None;
     }
     if selector.starts_with("window.calculator") {
@@ -179,6 +186,7 @@ mod tests {
         assert!(css.contains("window.calculator .prev-line { font-size: 12px; }"));
         assert!(css.contains("window.calculator button.key.clear { font-weight: 700; }"));
         assert!(!css.contains("calc-prefs"));
+        assert!(!css.contains("picker-list") && !css.contains("popover"));
     }
 
     #[test]

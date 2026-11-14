@@ -158,12 +158,13 @@ button.icon-btn:checked {
   color: @on_surface_variant;
   border: none;
   box-shadow: none;
-  /* Three tabs (standard, scientific, converter): kept narrow, so the top bar
-     stays narrower than the keys and the window can stay small. */
+  /* An M3 connected button group, small size: 40px high, at least 48px wide
+     (the minimum target), 2px apart, inner corners 8px, outer ends round.
+     Three tabs still leave the top bar narrower than the keys. */
   min-height: 40px;
-  min-width: 36px;
-  padding: 0 10px;
-  border-radius: 6px;
+  min-width: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
   font-weight: 500;
   transition: border-radius 320ms cubic-bezier(0.05, 0.7, 0.1, 1), background-color 180ms ease, color 180ms ease;
 }
@@ -192,29 +193,54 @@ button.icon-btn:checked {
 .converter .conv-value.output { color: @primary; font-weight: 500; }
 .text-small .converter .conv-value { font-size: 32px; }
 .text-large .converter .conv-value { font-size: 50px; }
+/* The pickers are M3 filter chips that open a menu: 32px high, 8px corners,
+   label large (14px, medium), 16px before the label and 8px around the
+   trailing 18px icon. The category is a selected (tonal) chip, the units
+   unselected ones: an outline instead of a fill, so the values lead. */
 menubutton.picker > button {
   background: none;
-  background-color: @surface_container_high;
-  color: @on_surface;
+  color: @on_surface_variant;
   border: none;
-  box-shadow: none;
-  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px @outline_variant;
+  border-radius: 8px;
   min-height: 32px;
-  padding: 0 6px 0 12px;
-  font-size: 15px;
+  padding: 0 8px 0 16px;
+  font-size: 14px;
   font-weight: 500;
 }
-menubutton.picker > button:hover { background-color: @surface_container_highest; }
+menubutton.picker > button:hover { background-color: alpha(@on_surface_variant, 0.08); }
+menubutton.picker > button:checked { background-color: alpha(@on_surface_variant, 0.12); }
 menubutton.picker.category > button {
   background-color: @secondary_container;
   color: @on_secondary_container;
+  box-shadow: none;
 }
 menubutton.picker.category > button:hover { background-color: mix(@secondary_container, @on_secondary_container, 0.08); }
 menubutton.picker .picker-arrow { font-size: 18px; }
-popover.picker-popover > contents { padding: 6px; border-radius: 18px; }
+
+/* Their menus: M3 vertical menu, standard colours. Items 48px high; the
+   current one tertiary container, with a check mark. */
+popover.picker-popover > contents {
+  background-color: @surface_container_low;
+  color: @on_surface;
+  padding: 4px;
+  border-radius: 16px;
+  min-width: 112px;
+}
+popover.picker-popover > arrow { background-color: @surface_container_low; }
 .picker-list { background: none; }
-.picker-list > row { padding: 8px 14px; border-radius: 12px; }
-.picker-list label.current { color: @primary; font-weight: 700; }
+popover.picker-popover .picker-list > row {
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: @on_surface;
+}
+popover.picker-popover .picker-list > row:hover { background-color: alpha(@on_surface, 0.08); }
+popover.picker-popover .picker-list > row.current {
+  background-color: @tertiary_container;
+  color: @on_tertiary_container;
+}
+popover.picker-popover .picker-list > row.current:hover { background-color: mix(@tertiary_container, @on_tertiary_container, 0.08); }
 
 .display {
   padding: 4px 26px 18px 26px;

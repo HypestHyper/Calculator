@@ -44,7 +44,7 @@ pub struct Converter {
 /// A compact button showing a choice, with a list to pick from.
 fn picker(css: &str) -> (gtk::MenuButton, gtk::Label) {
     let label = gtk::Label::new(None);
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     content.append(&label);
     let arrow = icon("expand_more", 16);
     arrow.add_css_class("picker-arrow");
@@ -71,11 +71,21 @@ fn set_choices(
         .css_classes(["picker-list"])
         .build();
     for (i, item) in items.iter().enumerate() {
-        let label = gtk::Label::builder().label(item).xalign(0.0).build();
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        content.append(
+            &gtk::Label::builder()
+                .label(item)
+                .xalign(0.0)
+                .hexpand(true)
+                .build(),
+        );
+        let row = gtk::ListBoxRow::builder().child(&content).build();
         if i == current {
-            label.add_css_class("current");
+            // Colour and a check mark, not colour alone.
+            content.append(&icon("check", 20));
+            row.add_css_class("current");
         }
-        list.append(&label);
+        list.append(&row);
     }
     let scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)

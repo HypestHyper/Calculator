@@ -8,7 +8,8 @@
 
 ### Changed
 
-- The mode tabs are narrower, so three fit without widening the window.
+- The mode tabs follow Material 3's connected button group: at least 48 px wide at full size, 8 px inner corners. Three of them still leave the top bar narrower than the keys.
+- The converter's pickers follow Material 3 more closely: chips with 8 px corners (the units outlined, the category filled), and menus with 48 px rows that stay full size in a small window, the current choice marked with colour and a check mark.
 - Switching between standard and scientific mode is smoother: the keys keep their stretch and change size along with the sliding panel, and the calculator fits the new window as soon as the slide is over, instead of a second and a half later.
 
 ## 2.0.3 — 2026-10-24
