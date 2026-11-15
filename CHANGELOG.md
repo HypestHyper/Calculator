@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.0.4 — 2026-11-15
 
 ### Added
 
+- An AppImage in each release: download, make it executable and run it, with nothing to install. It includes GTK, so it runs on most x86-64 Linux systems.
 - A unit converter, as a third tab next to Standard and Scientific. It covers length, weight, temperature, volume, area, speed, time, data (both 1000 and 1024 based), pressure, energy, power, angle and fuel economy: about 100 units, with exact definitions where there are any. The value is typed on the keypad, so expressions such as 12×2.54 work; the swap button turns the result into the new value. The category and the units last used in each category are remembered, and Ctrl+C copies the result.
 
 ### Changed
