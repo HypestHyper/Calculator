@@ -35,6 +35,10 @@ jobs:
         run: |
           cargo test --release
           cargo build --release
+      - name: Build the AppImage
+        run: |
+          packaging/appimage/build.sh
+          mv build/appimage/Calculator-*.AppImage .
       - name: Build the archive
         run: |
           # The source, with the built program in bin/ for systems without Rust.
@@ -61,6 +65,15 @@ jobs:
               git pull
               ./install.sh
 
+          **Or run the AppImage**, with nothing to install: download Calculator-$VERSION-x86_64.AppImage
+          from the files below, then:
+
+              chmod +x Calculator-$VERSION-x86_64.AppImage
+              ./Calculator-$VERSION-x86_64.AppImage
+
+          It includes GTK, so it runs on most x86-64 Linux systems. It doesn't add a launcher entry
+          by itself; use an AppImage integration tool for that, or one of the other ways.
+
           **Or download** calculator-$VERSION.tar.gz from the files below, then:
 
               tar xzf calculator-$VERSION.tar.gz
@@ -77,9 +90,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release upload "v$VERSION" "calculator-$VERSION.tar.gz" --clobber
+            gh release upload "v$VERSION" "calculator-$VERSION.tar.gz" Calculator-*.AppImage --clobber
             gh release edit "v$VERSION" --notes-file notes.md
           else
-            gh release create "v$VERSION" "calculator-$VERSION.tar.gz" --title "$VERSION" \
+            gh release create "v$VERSION" "calculator-$VERSION.tar.gz" Calculator-*.AppImage --title "$VERSION" \
               --notes-file notes.md --target "$GITHUB_SHA"
           fi

@@ -73,6 +73,8 @@ cd Calculator
 
 The installer builds the program with cargo, then installs it with its icons, font and launcher entry. To update, run `git pull` and `./install.sh` again in the same folder. Settings and history are kept.
 
+To try it without installing anything, download `Calculator-<version>-x86_64.AppImage` from the [latest release](https://github.com/HypestHyper/Calculator/releases/latest), make it executable (`chmod +x`) and run it. It includes GTK, so it runs on most x86-64 Linux systems.
+
 Without Rust, download `calculator-<version>.tar.gz` from the [latest release](https://github.com/HypestHyper/Calculator/releases/latest), unpack it and run `./install.sh` in its folder: it uses the ready-built program inside.
 
 Use `sudo ./install.sh --system` to install to `/usr/local` (build first as yourself with `cargo build --release`), or `--prefix DIR` for another location. To remove it, run `./uninstall.sh` with the same option; add `--purge` to also delete settings and history.
