@@ -17,7 +17,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # The oldest Ubuntu with GTK 4.10 or newer, so the AppImage (which needs a
+    # system at least as new as the one it was built on) runs on more systems.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Work out the version
